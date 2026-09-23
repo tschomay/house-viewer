@@ -42,6 +42,8 @@ export default function StereoViewer({ model, layout, strength, activeLayer, gyr
     const renderer = new THREE.WebGLRenderer({ antialias: true });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setClearColor("#0b0c0f");
+    // Two passes per eye (see tick), so clearing is manual.
+    renderer.autoClear = false;
     host.appendChild(renderer.domElement);
     renderer.domElement.style.display = "block";
     renderer.domElement.style.touchAction = "none";
@@ -78,7 +80,7 @@ export default function StereoViewer({ model, layout, strength, activeLayer, gyr
       g.scale.setScalar(layer.pose.scale);
       scene.add(g);
       disposables.push(tex, geo, mat, backMat, back.geometry);
-      return { g, back };
+      return { g, back, mesh };
     });
 
     const photo = model.layers[0]?.photo;
@@ -175,9 +177,13 @@ export default function StereoViewer({ model, layout, strength, activeLayer, gyr
       const idx = Math.min(activeLayer, model.layers.length - 1);
       const layer = model.layers[idx];
       if (!layer) return;
-      groups.forEach(({ g, back }, i) => {
+      // Pass 0: backdrop + the room's other photos. Pass 1: the active photo, drawn over
+      // pass 0 so a slightly misplaced neighbour can never cover the current view; the
+      // others only show through its holes and when you look beyond its edges.
+      groups.forEach(({ g, back, mesh }, i) => {
         g.visible = merged ? model.layers[i].registered || i === idx : i === idx;
         back.visible = i === idx;
+        mesh.layers.set(i === idx ? 1 : 0);
       });
 
       // Camera sits where the active photo was taken, looking the same way.
@@ -223,6 +229,11 @@ export default function StereoViewer({ model, layout, strength, activeLayer, gyr
         const y = (height - r.h) / 2;
         renderer.setViewport(x, y, r.w, r.h);
         renderer.setScissor(x, y, r.w, r.h);
+        renderer.clear();
+        eye.cam.layers.set(0);
+        renderer.render(scene, eye.cam);
+        renderer.clearDepth();
+        eye.cam.layers.set(1);
         renderer.render(scene, eye.cam);
         guides.push(`${x + r.w / 2}px`);
       }

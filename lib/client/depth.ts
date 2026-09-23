@@ -40,10 +40,38 @@ function getWorker(): Worker {
 // The worker handles one image at a time; queue so progress stays sane.
 let queue: Promise<unknown> = Promise.resolve();
 
+/** No result and no download progress for this long = the runtime is stuck (e.g. a missing WASM file). */
+const STALL_MS = 60_000;
+
 function browserDepth(image: ListingImage): Promise<{ width: number; height: number; data: Uint8Array }> {
   const run = () =>
     new Promise<{ width: number; height: number; data: Uint8Array }>((resolve, reject) => {
-      pending.set(image.id, { resolve, reject });
+      let timer: ReturnType<typeof setTimeout>;
+      const stalled = () => {
+        pending.delete(image.id);
+        stopListening();
+        worker?.terminate();
+        worker = null;
+        reject(new Error("The on-device depth model stopped responding"));
+      };
+      const bump = () => {
+        clearTimeout(timer);
+        timer = setTimeout(stalled, STALL_MS);
+      };
+      const stopListening = onModelProgress(bump);
+      bump();
+      pending.set(image.id, {
+        resolve: (d) => {
+          clearTimeout(timer);
+          stopListening();
+          resolve(d);
+        },
+        reject: (e) => {
+          clearTimeout(timer);
+          stopListening();
+          reject(e);
+        },
+      });
       getWorker().postMessage({ id: image.id, dataUrl: image.dataUrl });
     });
   const p = queue.then(run, run);
