@@ -1,3 +1,7 @@
+## Start here
+
+Project state, what's verified, what's blocked and the next steps: [`docs/STATUS.md`](docs/STATUS.md). Architecture and decisions: [`README.md`](README.md). Keep STATUS.md current when you finish a work session.
+
 ## Agent skills
 
 ### Issue tracker
