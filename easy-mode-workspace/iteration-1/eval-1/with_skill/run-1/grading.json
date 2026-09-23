@@ -1,0 +1,66 @@
+{
+  "expectations": [
+    {
+      "text": "Deliverable is a self-contained HTML page, not only a chat reply or markdown file",
+      "passed": true,
+      "evidence": "roastlog-dns-cutover.html (28774 bytes)"
+    },
+    {
+      "text": "Every command and pasteable value sits in a copy-to-clipboard block with a button",
+      "passed": true,
+      "evidence": "9 copy buttons, 9 targets, orphans=none"
+    },
+    {
+      "text": "Copy blocks use white-space:pre so long values cannot soft-wrap into the copied text",
+      "passed": true,
+      "evidence": "white-space:pre present"
+    },
+    {
+      "text": "Links target specific console pages rather than product homepages",
+      "passed": true,
+      "evidence": "5/5 links are deep paths"
+    },
+    {
+      "text": "Checklist progress persists to localStorage inside try/catch",
+      "passed": true,
+      "evidence": "localStorage wrapped in try/catch"
+    },
+    {
+      "text": "At least one warning is placed inside the step where it fires, not only in a preamble",
+      "passed": true,
+      "evidence": "6/8 steps contain an inline callout"
+    },
+    {
+      "text": "Names at least one concrete failure signature (symptom to cause)",
+      "passed": true,
+      "evidence": "signals: ['symptom', 'means']"
+    },
+    {
+      "text": "Multi-command shell sequences are wrapped as a single paste (heredoc or one block)",
+      "passed": true,
+      "evidence": "heredoc single-paste block present"
+    },
+    {
+      "text": "States whether re-running a step is safe, or makes scripts idempotent",
+      "passed": true,
+      "evidence": "signals: ['safe to run again', 'as many times']"
+    },
+    {
+      "text": "Prerequisites that could block the whole procedure are front-loaded before step 1 work",
+      "passed": true,
+      "evidence": "pre-step signals: ['before you start', 'prerequisite', 'first']"
+    }
+  ],
+  "summary": {
+    "passed": 10,
+    "failed": 0,
+    "total": 10,
+    "pass_rate": 1.0
+  },
+  "timing": {
+    "total_duration_seconds": 339.6
+  },
+  "execution_metrics": {
+    "total_tokens": 77059
+  }
+}

@@ -1,0 +1,66 @@
+{
+  "expectations": [
+    {
+      "text": "Deliverable is a self-contained HTML page, not only a chat reply or markdown file",
+      "passed": false,
+      "evidence": "no HTML file produced; got ['chat_reply.md', 'roastlog-coffee-dns-setup.md']"
+    },
+    {
+      "text": "Every command and pasteable value sits in a copy-to-clipboard block with a button",
+      "passed": false,
+      "evidence": "no HTML deliverable"
+    },
+    {
+      "text": "Copy blocks use white-space:pre so long values cannot soft-wrap into the copied text",
+      "passed": false,
+      "evidence": "no HTML deliverable"
+    },
+    {
+      "text": "Links target specific console pages rather than product homepages",
+      "passed": false,
+      "evidence": "no HTML deliverable"
+    },
+    {
+      "text": "Checklist progress persists to localStorage inside try/catch",
+      "passed": false,
+      "evidence": "no HTML deliverable"
+    },
+    {
+      "text": "At least one warning is placed inside the step where it fires, not only in a preamble",
+      "passed": false,
+      "evidence": "no HTML deliverable"
+    },
+    {
+      "text": "Names at least one concrete failure signature (symptom to cause)",
+      "passed": false,
+      "evidence": "signals: ['symptom']"
+    },
+    {
+      "text": "Multi-command shell sequences are wrapped as a single paste (heredoc or one block)",
+      "passed": false,
+      "evidence": "no heredoc-wrapped block"
+    },
+    {
+      "text": "States whether re-running a step is safe, or makes scripts idempotent",
+      "passed": false,
+      "evidence": "signals: none"
+    },
+    {
+      "text": "Prerequisites that could block the whole procedure are front-loaded before step 1 work",
+      "passed": false,
+      "evidence": "no HTML deliverable"
+    }
+  ],
+  "summary": {
+    "passed": 0,
+    "failed": 10,
+    "total": 10,
+    "pass_rate": 0.0
+  },
+  "timing": {
+    "total_duration_seconds": 138.1
+  },
+  "execution_metrics": {
+    "total_tokens": 50774
+  }
+}

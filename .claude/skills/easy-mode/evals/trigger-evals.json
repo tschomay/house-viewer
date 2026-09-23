@@ -1,0 +1,69 @@
+{
+  "skill_name": "easy-mode",
+  "tuning_date": "2026-08-27",
+  "analysis": {
+    "issue": "Prior agents struggled with trigger detection, particularly for implicit cases (eval-2) where no explicit 'walk me through' or 'on mobile' signal exists but the task is clearly manual multi-step work that benefits from easy-mode.",
+    "solution": "Two-tier trigger heuristics: explicit signals (high confidence) and implicit patterns (detect manual procedures without explicit signals)."
+  },
+  "trigger_heuristics": {
+    "explicit_signals": [
+      "walk me through",
+      "give me the steps",
+      "how do I",
+      "on my phone",
+      "on mobile",
+      "make it easy",
+      "easier"
+    ],
+    "implicit_patterns": [
+      "Dashboard/console navigation tasks (setup, configure, provision)",
+      "Multi-step manual procedures (especially when order matters or error recovery is needed)",
+      "Tasks requiring copying values, pasting tokens, or clicking through multiple pages",
+      "Cloud identity/secret management (IAM, API keys, environment variables)",
+      "DNS/domain configuration",
+      "Credential rotation or key management"
+    ],
+    "decision_logic": "Invoke easy-mode if: (1) ANY explicit signal is present, OR (2) Task is manual multi-step work that user cannot do programmatically and involves copying/pasting/clicking."
+  },
+  "eval_classifications": [
+    {
+      "id": 0,
+      "name": "stripe-webhook-setup",
+      "trigger_type": "EXPLICIT",
+      "signals_detected": [
+        "on my phone",
+        "give me the steps",
+        "make it easier"
+      ],
+      "should_invoke": true,
+      "confidence": 1.0
+    },
+    {
+      "id": 1,
+      "name": "namecheap-dns-to-vercel",
+      "trigger_type": "EXPLICIT",
+      "signals_detected": [
+        "walk me through"
+      ],
+      "should_invoke": true,
+      "confidence": 1.0
+    },
+    {
+      "id": 2,
+      "name": "rotate-aws-ci-keys",
+      "trigger_type": "IMPLICIT",
+      "signals_detected": [
+        "Cloud credential rotation (implicit pattern)",
+        "Multi-step procedure with sequencing risk"
+      ],
+      "should_invoke": true,
+      "confidence": 0.95,
+      "note": "No explicit 'walk me through' but matches implicit pattern: multi-step IAM key rotation with strict sequencing (create new before deleting old). User cannot automate the AWS console navigation."
+    }
+  ],
+  "recommendations": {
+    "update_skill_description": "Clarify that easy-mode should be invoked not only on explicit 'walk me through' but also for implicit cases: any manual procedure involving cloud consoles, copy/paste workflows, or multi-step setup without automation.",
+    "confidence_threshold": "Invoke if confidence >= 0.9 (covers both explicit and high-confidence implicit)",
+    "monitoring": "Track cases where easy-mode was not invoked but should have been (false negatives) vs invoked unnecessarily (false positives)"
+  }
+}

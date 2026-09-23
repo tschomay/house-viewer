@@ -1,0 +1,37 @@
+{
+  "eval_id": 0,
+  "eval_name": "stripe-webhook-setup",
+  "prompt": "i need to set up stripe webhooks for my side project. the endpoint is already deployed at api.roastlog.dev/webhooks/stripe and it handles checkout.session.completed and invoice.payment_failed. i've never done the stripe dashboard side of this though. can you give me the steps? i'm on my phone right now so anything that makes it easier would help",
+  "assertions": [
+    {
+      "text": "Deliverable is a self-contained HTML page, not only a chat reply or markdown file"
+    },
+    {
+      "text": "Every command and pasteable value sits in a copy-to-clipboard block with a button"
+    },
+    {
+      "text": "Copy blocks use white-space:pre so long values cannot soft-wrap into the copied text"
+    },
+    {
+      "text": "Links target specific console pages rather than product homepages"
+    },
+    {
+      "text": "Checklist progress persists to localStorage inside try/catch"
+    },
+    {
+      "text": "At least one warning is placed inside the step where it fires, not only in a preamble"
+    },
+    {
+      "text": "Names at least one concrete failure signature (symptom to cause)"
+    },
+    {
+      "text": "Multi-command shell sequences are wrapped as a single paste (heredoc or one block)"
+    },
+    {
+      "text": "States whether re-running a step is safe, or makes scripts idempotent"
+    },
+    {
+      "text": "Prerequisites that could block the whole procedure are front-loaded before step 1 work"
+    }
+  ]
+}

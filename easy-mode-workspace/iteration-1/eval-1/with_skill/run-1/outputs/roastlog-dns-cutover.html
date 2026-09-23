@@ -1,0 +1,745 @@
+<title>Roastlog DNS Cutover</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@100,500..800&family=JetBrains+Mono:wght@400;700&family=Newsreader:opsz,wght@6..72,400..600&display=swap">
+
+<style>
+:root {
+  --ground:   #F2F3EF;
+  --surface:  #FBFCF9;
+  --ink:      #171A15;
+  --muted:    #5E6459;
+  --hair:     #D3D7CD;
+  --hair-soft:#E3E6DE;
+  --accent:   #0E6B4F;
+  --accent-in:#FFFFFF;
+  --accent-wash:#E2EDE7;
+  --ember:    #A8500B;
+  --ember-wash:#F6EBDF;
+  --code-bg:  #EAECE5;
+  --shadow:   0 1px 0 rgba(23,26,21,.05);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground:   #12140F;
+    --surface:  #1A1D17;
+    --ink:      #E7EBE1;
+    --muted:    #98A190;
+    --hair:     #2E332A;
+    --hair-soft:#23271F;
+    --accent:   #57C79A;
+    --accent-in:#0B1611;
+    --accent-wash:#17281F;
+    --ember:    #E2A75F;
+    --ember-wash:#2A2115;
+    --code-bg:  #101309;
+    --shadow:   0 1px 0 rgba(0,0,0,.4);
+  }
+}
+:root[data-theme="dark"] {
+  --ground:   #12140F;
+  --surface:  #1A1D17;
+  --ink:      #E7EBE1;
+  --muted:    #98A190;
+  --hair:     #2E332A;
+  --hair-soft:#23271F;
+  --accent:   #57C79A;
+  --accent-in:#0B1611;
+  --accent-wash:#17281F;
+  --ember:    #E2A75F;
+  --ember-wash:#2A2115;
+  --code-bg:  #101309;
+  --shadow:   0 1px 0 rgba(0,0,0,.4);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Newsreader", Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  line-height: 1.62;
+  margin: 0;
+  -webkit-text-size-adjust: 100%;
+}
+
+.wrap {
+  max-width: 45rem;
+  margin: 0 auto;
+  padding: 0 1.15rem 5rem;
+}
+
+/* ---------- masthead ---------- */
+
+.masthead { padding: 2.6rem 0 1.4rem; }
+
+.kicker {
+  font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  font-size: .69rem;
+  font-weight: 700;
+  letter-spacing: .17em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 .85rem;
+}
+
+.route {
+  font-family: "JetBrains Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  font-size: clamp(1.32rem, 6.2vw, 2rem);
+  font-weight: 700;
+  letter-spacing: -.02em;
+  line-height: 1.24;
+  margin: 0;
+  text-wrap: balance;
+}
+.route .arrow { color: var(--accent); font-weight: 400; }
+
+.standfirst {
+  color: var(--muted);
+  margin: .9rem 0 0;
+  max-width: 34em;
+}
+
+.facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: .45rem .5rem;
+  margin-top: 1.3rem;
+  padding: 0;
+  list-style: none;
+}
+.facts li {
+  font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  font-size: .74rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border: 1px solid var(--hair);
+  padding: .26rem .55rem;
+}
+
+/* ---------- progress ---------- */
+
+.progress {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--ground);
+  padding: .7rem 0 .6rem;
+  border-bottom: 1px solid var(--hair);
+  margin-bottom: 2.1rem;
+}
+.progress-row {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 1rem;
+  font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin-bottom: .5rem;
+}
+#label { color: var(--ink); font-variant-numeric: tabular-nums; letter-spacing: .05em; }
+.track { height: 3px; background: var(--hair); }
+#fill { height: 3px; width: 0; background: var(--accent); transition: width .28s ease; }
+@media (prefers-reduced-motion: reduce) { #fill { transition: none; } }
+
+/* ---------- prerequisites ---------- */
+
+.pre {
+  border-top: 2px solid var(--ink);
+  border-bottom: 1px solid var(--hair);
+  padding: 1.15rem 0 1.35rem;
+  margin-bottom: 2.4rem;
+}
+.pre h2 {
+  font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  margin: 0 0 .8rem;
+}
+.pre p { margin: 0 0 .75rem; }
+.pre p:last-child { margin-bottom: 0; }
+
+/* ---------- steps ---------- */
+
+.steps { list-style: none; margin: 0; padding: 0; }
+
+.step {
+  border-top: 1px solid var(--hair);
+  padding: 1.6rem 0 1.9rem;
+}
+.step:last-child { border-bottom: 1px solid var(--hair); }
+
+.step-head {
+  display: flex;
+  gap: .95rem;
+  align-items: flex-start;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.step-head:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 5px;
+}
+
+.tick {
+  flex: 0 0 auto;
+  width: 1.85rem;
+  height: 1.85rem;
+  display: grid;
+  place-items: center;
+  border: 1.5px solid var(--hair);
+  color: var(--muted);
+  background: var(--surface);
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: .82rem;
+  font-weight: 700;
+  margin-top: .1rem;
+  transition: background .16s ease, color .16s ease, border-color .16s ease;
+}
+@media (prefers-reduced-motion: reduce) { .tick { transition: none; } }
+
+.step-title {
+  font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  font-size: 1.09rem;
+  font-weight: 700;
+  letter-spacing: -.005em;
+  line-height: 1.32;
+  text-wrap: balance;
+}
+
+.step.done .tick {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-in);
+}
+.step.done .step-title { color: var(--muted); }
+.step.done .step-body { opacity: .55; }
+
+.step-body {
+  padding-left: 2.8rem;
+  margin-top: .7rem;
+  transition: opacity .2s ease;
+}
+@media (prefers-reduced-motion: reduce) { .step-body { transition: none; } }
+.step-body > :first-child { margin-top: 0; }
+.step-body p { margin: .8rem 0; }
+.step-body ul { margin: .8rem 0; padding-left: 1.15rem; }
+.step-body li { margin: .3rem 0; }
+
+@media (max-width: 30rem) {
+  .step-body { padding-left: 0; }
+}
+
+/* ---------- shared inline bits ---------- */
+
+a { color: var(--accent); text-underline-offset: .18em; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 3px; }
+
+.golink {
+  display: inline-block;
+  font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  font-size: .82rem;
+  font-weight: 700;
+  letter-spacing: .02em;
+  text-decoration: none;
+  color: var(--accent-in);
+  background: var(--accent);
+  padding: .5rem .8rem;
+  margin: .2rem 0 .3rem;
+}
+.golink::after { content: " \2197"; font-weight: 500; }
+.golink:hover { filter: brightness(1.08); }
+
+code.inl {
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: .86em;
+  background: var(--code-bg);
+  padding: .09em .34em;
+  word-break: break-word;
+}
+
+.field-label {
+  font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  font-size: .69rem;
+  font-weight: 700;
+  letter-spacing: .13em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 1.1rem 0 .35rem;
+}
+
+/* ---------- copy blocks ---------- */
+
+.copybox { position: relative; margin: .4rem 0 .9rem; }
+.copybox pre {
+  margin: 0;
+  background: var(--code-bg);
+  border: 1px solid var(--hair-soft);
+  overflow-x: auto;
+  padding: .7rem .8rem 2.7rem;
+  box-shadow: var(--shadow);
+}
+.copybox code {
+  white-space: pre;
+  font-family: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  font-size: .84rem;
+  line-height: 1.65;
+  color: var(--ink);
+}
+.copybtn {
+  position: absolute;
+  right: .5rem;
+  bottom: .5rem;
+  font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  font-size: .7rem;
+  font-weight: 700;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--hair);
+  padding: .38rem .7rem;
+  cursor: pointer;
+}
+.copybtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.copybtn.copied { background: var(--accent); border-color: var(--accent); color: var(--accent-in); }
+
+/* ---------- callouts ---------- */
+
+.warn, .note {
+  border-left: 2px solid var(--ember);
+  background: var(--ember-wash);
+  padding: .7rem .85rem;
+  margin: .95rem 0;
+  font-size: .96rem;
+}
+.note { border-left-color: var(--accent); background: var(--accent-wash); }
+.warn p, .note p { margin: 0; }
+.warn p + p, .note p + p { margin-top: .5rem; }
+.warn b, .note b {
+  font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  font-weight: 700;
+  font-size: .93em;
+}
+
+/* ---------- symptom table ---------- */
+
+.after {
+  margin-top: 3.2rem;
+  border-top: 2px solid var(--ink);
+  padding-top: 1.3rem;
+}
+.after h2 {
+  font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  font-size: .78rem;
+  font-weight: 800;
+  letter-spacing: .15em;
+  text-transform: uppercase;
+  margin: 0 0 .3rem;
+}
+.after > p { color: var(--muted); margin: 0 0 1.2rem; }
+
+.tablewrap { overflow-x: auto; }
+table { border-collapse: collapse; width: 100%; min-width: 30rem; }
+th, td {
+  text-align: left;
+  vertical-align: top;
+  padding: .65rem .7rem .65rem 0;
+  border-bottom: 1px solid var(--hair-soft);
+  font-size: .95rem;
+}
+th {
+  font-family: "Archivo", "Helvetica Neue", Arial, sans-serif;
+  font-size: .69rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--muted);
+  border-bottom: 1px solid var(--hair);
+}
+td:first-child { width: 38%; padding-right: 1.2rem; }
+
+.colophon {
+  margin-top: 2.6rem;
+  color: var(--muted);
+  font-size: .88rem;
+  border-top: 1px solid var(--hair-soft);
+  padding-top: 1rem;
+}
+</style>
+
+<div class="wrap">
+
+<header class="masthead">
+  <p class="kicker">Namecheap &rarr; Vercel &middot; DNS cutover</p>
+  <h1 class="route">roastlog.coffee <span class="arrow">&rarr;</span> roastlog-web</h1>
+  <p class="standfirst">Both the apex and <code class="inl">www</code>, on HTTPS, with Namecheap staying in charge of DNS. Tap a step to check it off &mdash; your place is saved on this device, so you can put the phone down mid-way.</p>
+  <ul class="facts">
+    <li>8 steps</li>
+    <li>~10 min of clicking</li>
+    <li>Up to 1 hr of waiting</li>
+    <li>No nameserver change</li>
+  </ul>
+</header>
+
+<div class="progress">
+  <div class="progress-row"><span>Progress</span><span id="label">0 / 8</span></div>
+  <div class="track"><div id="fill"></div></div>
+</div>
+
+<section class="pre">
+  <h2>Before you start</h2>
+  <p>You will be moving between two dashboards, so log into both first: <strong>Namecheap</strong> (the registrar, where the records live) and <strong>Vercel</strong> (which needs to be told the domain belongs to the project). Namecheap's Advanced DNS editor is usable on a phone but cramped &mdash; if a desktop is within reach, steps 4&ndash;6 go faster there.</p>
+  <p><strong>One thing to settle first.</strong> I looked at your Vercel account (<code class="inl">tschomay</code>, Hobby plan) and there is no project called <strong>roastlog-web</strong> in it. The four projects there are <em>sound-games</em>, <em>auralux</em>, <em>tschomay-site-preview</em> and <em>harness-playground</em>. So either roastlog-web lives under a different Vercel login, or it hasn't been created yet. Sort that out before step 2 &mdash; every link below assumes the project sits under the <code class="inl">tschomay</code> account, and you'll need to swap the account name in the URL if it doesn't.</p>
+  <p>Nothing here touches your deployment. If you stop halfway, the site keeps serving on its <code class="inl">.vercel.app</code> address exactly as it does now.</p>
+</section>
+
+<ol class="steps" id="steps">
+
+  <li class="step" data-id="ns">
+    <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+      <span class="tick">1</span>
+      <span class="step-title">Confirm Namecheap is actually the one answering DNS</span>
+    </div>
+    <div class="step-body">
+      <p>Open the domain's <strong>Domain</strong> tab and look at the <strong>Nameservers</strong> dropdown. It must say <strong>Namecheap BasicDNS</strong> (or Premium DNS). If it says <em>Custom DNS</em> and lists someone else's servers, stop and tell me what it lists.</p>
+      <a class="golink" href="https://ap.www.namecheap.com/domains/domaincontrolpanel/roastlog.coffee/domain">Namecheap &middot; Domain tab</a>
+      <div class="warn">
+        <p><b>Why this is step 1.</b> If the nameservers point somewhere else, the Advanced DNS tab still lets you type records and still shows a green checkmark when you save &mdash; those records are simply never served. You would do all eight steps, see nothing change, and have no error message to go on. Checking now costs ten seconds.</p>
+      </div>
+    </div>
+  </li>
+
+  <li class="step" data-id="add-domains">
+    <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+      <span class="tick">2</span>
+      <span class="step-title">Add both domains to the Vercel project</span>
+    </div>
+    <div class="step-body">
+      <p>Vercel will not serve a domain it hasn't been told about, no matter what DNS says. Add the apex first, then the <code class="inl">www</code> version.</p>
+      <a class="golink" href="https://vercel.com/tschomay/roastlog-web/settings/domains">Vercel &middot; roastlog-web domains</a>
+      <p class="field-label">Add this one first</p>
+      <div class="copybox">
+<pre><code id="v-apex">roastlog.coffee</code></pre>
+        <button class="copybtn" type="button" data-copy="v-apex">Copy</button>
+      </div>
+      <p class="field-label">Then this one</p>
+      <div class="copybox">
+<pre><code id="v-www">www.roastlog.coffee</code></pre>
+        <button class="copybtn" type="button" data-copy="v-www">Copy</button>
+      </div>
+      <p>When you add the apex, Vercel offers a redirect choice. Pick the plain <strong>no redirect</strong> option for both for now &mdash; you'll set the direction deliberately in step 8, once both are actually resolving.</p>
+      <div class="note">
+        <p><b>Red "Invalid Configuration" is expected here.</b> It only means DNS doesn't point at Vercel yet, which is true &mdash; that's what steps 4&ndash;6 fix. Don't remove the domain and re-add it.</p>
+      </div>
+    </div>
+  </li>
+
+  <li class="step" data-id="read-value">
+    <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+      <span class="tick">3</span>
+      <span class="step-title">Read the apex IP Vercel is giving you</span>
+    </div>
+    <div class="step-body">
+      <p>This is the one value I can't know in advance. On that same Domains page, <code class="inl">roastlog.coffee</code> now shows the record it wants: an <strong>A</strong> record with an IP address. Vercel has used two over the years and hands out different ones to different projects, so read yours off the screen rather than assuming.</p>
+      <p>It will be one of these. Tap the one that matches what Vercel shows:</p>
+      <p class="field-label">Current Vercel apex IP</p>
+      <div class="copybox">
+<pre><code id="ip-new">216.198.79.1</code></pre>
+        <button class="copybtn" type="button" data-copy="ip-new">Copy</button>
+      </div>
+      <p class="field-label">Older Vercel apex IP &mdash; still valid</p>
+      <div class="copybox">
+<pre><code id="ip-old">76.76.21.21</code></pre>
+        <button class="copybtn" type="button" data-copy="ip-old">Copy</button>
+      </div>
+      <div class="warn">
+        <p><b>If Vercel shows a third address,</b> use that one and ignore both of these. The dashboard is always right; these two are here so you don't have to retype digits on a phone keyboard.</p>
+      </div>
+    </div>
+  </li>
+
+  <li class="step" data-id="clear-parking">
+    <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+      <span class="tick">4</span>
+      <span class="step-title">Delete Namecheap's parking records</span>
+    </div>
+    <div class="step-body">
+      <p>Open <strong>Advanced DNS</strong>. Every new Namecheap domain ships with two records that will fight yours. Delete both with the trash icon at the right of each row.</p>
+      <a class="golink" href="https://ap.www.namecheap.com/domains/domaincontrolpanel/roastlog.coffee/advancedns">Namecheap &middot; Advanced DNS</a>
+      <ul>
+        <li>A <strong>CNAME Record</strong> with host <code class="inl">www</code> pointing at <code class="inl">parkingpage.namecheap.com.</code></li>
+        <li>A <strong>URL Redirect Record</strong> with host <code class="inl">@</code> pointing at <code class="inl">http://www.roastlog.coffee/</code></li>
+      </ul>
+      <div class="warn">
+        <p><b>Leave everything else alone.</b> If there are MX records or a TXT record starting <code class="inl">v=spf1</code>, those are your email &mdash; deleting them silently stops mail delivery to the domain, and it is not obvious for days. Only the two records named above should go.</p>
+        <p>Also check for a <strong>CAA record</strong>. If one exists and doesn't list <code class="inl">letsencrypt.org</code>, Vercel's certificate will never issue: the domain goes green, then HTTPS hangs on "certificate is being issued" forever. Either delete the CAA record or add <code class="inl">letsencrypt.org</code> to it.</p>
+      </div>
+    </div>
+  </li>
+
+  <li class="step" data-id="a-record">
+    <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+      <span class="tick">5</span>
+      <span class="step-title">Add the A record for the apex</span>
+    </div>
+    <div class="step-body">
+      <p>Still in Advanced DNS: <strong>Add New Record</strong> &rarr; type <strong>A Record</strong>. Three fields:</p>
+      <p class="field-label">Host</p>
+      <div class="copybox">
+<pre><code id="a-host">@</code></pre>
+        <button class="copybtn" type="button" data-copy="a-host">Copy</button>
+      </div>
+      <p class="field-label">Value &mdash; the IP from step 3</p>
+      <div class="copybox">
+<pre><code id="a-value">216.198.79.1</code></pre>
+        <button class="copybtn" type="button" data-copy="a-value">Copy</button>
+      </div>
+      <p class="field-label">TTL</p>
+      <p style="margin-top:.2rem">Set it to <strong>1 min</strong> from the dropdown, not Automatic. Automatic is 30 minutes, which is 30 minutes of staring at a stale answer every time you want to check whether a fix worked. Raise it later if you like.</p>
+      <div class="warn">
+        <p><b>Then press the green checkmark at the end of the row.</b> Namecheap does not save on blur &mdash; navigating away or hitting the back button discards the row with no warning. The row is saved only once the checkmark is gone and the value is plain text.</p>
+      </div>
+    </div>
+  </li>
+
+  <li class="step" data-id="cname">
+    <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+      <span class="tick">6</span>
+      <span class="step-title">Add the CNAME record for www</span>
+    </div>
+    <div class="step-body">
+      <p><strong>Add New Record</strong> &rarr; <strong>CNAME Record</strong>.</p>
+      <p class="field-label">Host</p>
+      <div class="copybox">
+<pre><code id="c-host">www</code></pre>
+        <button class="copybtn" type="button" data-copy="c-host">Copy</button>
+      </div>
+      <p class="field-label">Value</p>
+      <div class="copybox">
+<pre><code id="c-value">cname.vercel-dns.com</code></pre>
+        <button class="copybtn" type="button" data-copy="c-value">Copy</button>
+      </div>
+      <p>Set TTL to <strong>1 min</strong>, then press the green checkmark to save.</p>
+      <div class="note">
+        <p><b>If Vercel showed you something like <code class="inl">3d1f0a2b.vercel-dns-017.com</code> instead,</b> use that value &mdash; it's a region-specific alias and it's fine. The generic <code class="inl">cname.vercel-dns.com</code> above also works for every project, so either is a correct answer here.</p>
+      </div>
+      <div class="warn">
+        <p><b>Host is <code class="inl">www</code>, not <code class="inl">www.roastlog.coffee</code>.</b> Namecheap appends the domain itself. Typing the full name creates <code class="inl">www.roastlog.coffee.roastlog.coffee</code>, which resolves for nobody and looks completely correct in the table.</p>
+      </div>
+    </div>
+  </li>
+
+  <li class="step" data-id="verify">
+    <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+      <span class="tick">7</span>
+      <span class="step-title">Check what the internet actually sees</span>
+    </div>
+    <div class="step-body">
+      <p>Give it five minutes, then run this. One copy, one paste, one return &mdash; it's read-only and safe to run as many times as you like.</p>
+      <div class="copybox">
+<pre><code id="check-script">cat &gt; /tmp/check-roastlog.sh &lt;&lt;'EOF'
+#!/usr/bin/env bash
+# Read-only. Safe to run again as often as you like.
+set -u
+D=roastlog.coffee
+
+echo "== nameservers (want registrar-servers.com) =="
+dig +short NS "$D"
+
+echo
+echo "== apex A (want the IP from step 3) =="
+dig +short A "$D"
+
+echo
+echo "== www CNAME (want *.vercel-dns.com) =="
+dig +short CNAME "www.$D"
+
+echo
+echo "== CAA (want nothing, or a line naming letsencrypt.org) =="
+dig +short CAA "$D"
+
+echo
+echo "== live =="
+curl -sS -o /dev/null -w 'apex -&gt; %{http_code} %{redirect_url}\n' "https://$D" || true
+curl -sS -o /dev/null -w 'www  -&gt; %{http_code} %{redirect_url}\n' "https://www.$D" || true
+EOF
+bash /tmp/check-roastlog.sh</code></pre>
+        <button class="copybtn" type="button" data-copy="check-script">Copy</button>
+      </div>
+      <p><strong>A good result</strong> is the step-3 IP on the apex line, a <code class="inl">vercel-dns</code> name on the www line, and <code class="inl">200</code> on both live lines.</p>
+      <p><strong>On a phone with no terminal,</strong> skip this and use the propagation checker instead &mdash; then let step 8 be your confirmation.</p>
+      <a class="golink" href="https://dnschecker.org/#A/roastlog.coffee">Check propagation worldwide</a>
+      <div class="warn">
+        <p><b>Empty output, or the old parking IP, means wait &mdash; not that you got it wrong.</b> Your machine and your ISP cache the previous answer for up to the old record's TTL, which on Namecheap's default is 30 minutes. Re-run before changing anything.</p>
+      </div>
+    </div>
+  </li>
+
+  <li class="step" data-id="finish">
+    <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+      <span class="tick">8</span>
+      <span class="step-title">Finish in Vercel: refresh, certificate, redirect direction</span>
+    </div>
+    <div class="step-body">
+      <a class="golink" href="https://vercel.com/tschomay/roastlog-web/settings/domains">Vercel &middot; roastlog-web domains</a>
+      <ul>
+        <li>Hit <strong>Refresh</strong> next to each domain. Both should flip to <strong>Valid Configuration</strong>.</li>
+        <li>Vercel then issues the TLS certificate on its own. That's usually under a minute, occasionally a few. Nothing to do but reload.</li>
+        <li>Pick your primary. Open the <strong>Edit</strong> menu on <code class="inl">www.roastlog.coffee</code> and set it to redirect to <code class="inl">roastlog.coffee</code> &mdash; or the reverse, if you'd rather <code class="inl">www</code> be the real address. Both work; what matters is that one of them is canonical so you don't split analytics and SEO across two hostnames.</li>
+      </ul>
+      <p><strong>You're done when</strong> both domains read Valid Configuration, and opening <code class="inl">roastlog.coffee</code> and <code class="inl">www.roastlog.coffee</code> in a browser both land on the site with a padlock, one of them via a redirect.</p>
+      <div class="warn">
+        <p><b>If it still says Invalid Configuration after 15 minutes,</b> Vercel is reading a different value than <code class="inl">dig</code> is. Almost always that's a leftover parking record from step 4 that didn't get deleted, or a row in Namecheap that was never committed with the green checkmark. Re-open Advanced DNS and count the rows &mdash; there should be exactly one A record on <code class="inl">@</code> and one CNAME on <code class="inl">www</code>.</p>
+      </div>
+    </div>
+  </li>
+
+</ol>
+
+<section class="after">
+  <h2>If something breaks later</h2>
+  <p>These are the failures that show up after the page has gone green, when the cause is furthest from the symptom.</p>
+  <div class="tablewrap">
+    <table>
+      <thead>
+        <tr><th>What you see</th><th>What it actually means</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>Apex loads, <code class="inl">www</code> gives a certificate warning</td>
+          <td>The CNAME landed but Vercel never issued a cert for that hostname &mdash; usually because <code class="inl">www.roastlog.coffee</code> was never added as a domain in step 2. Add it and hit Refresh.</td>
+        </tr>
+        <tr>
+          <td>Namecheap's parking page keeps appearing</td>
+          <td>The URL Redirect Record on <code class="inl">@</code> is still there. A URL Redirect silently overrides the A record on the same host, so the A record looks perfect and does nothing.</td>
+        </tr>
+        <tr>
+          <td>Works for you, parking page for someone else</td>
+          <td>Normal propagation. Their resolver still has the old answer cached. Resolves itself within the old TTL.</td>
+        </tr>
+        <tr>
+          <td>"Certificate is being issued" that never finishes</td>
+          <td>A CAA record on the domain is blocking Let's Encrypt. See the CAA note in step 4.</td>
+        </tr>
+        <tr>
+          <td>Email to the domain stops arriving</td>
+          <td>An MX or SPF record went missing during step 4. Namecheap keeps no history &mdash; get the values from your mail provider's setup page and re-add them.</td>
+        </tr>
+        <tr>
+          <td>Endless redirect loop between apex and www</td>
+          <td>Both domains are set to redirect to each other in Vercel's Edit menu. Exactly one should redirect; the other serves.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="colophon">Values checked against Vercel's current domain docs. The apex IP in step 5's copy block is the current default &mdash; if your dashboard shows the older <code class="inl">76.76.21.21</code>, use that instead; both are live.</p>
+</section>
+
+</div>
+
+<script>
+(function () {
+  document.querySelectorAll(".copybtn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var target = document.getElementById(btn.dataset.copy);
+      if (!target) { return; }
+      var text = target.innerText;
+
+      function done(ok) {
+        btn.textContent = ok ? "Copied" : "Select manually";
+        btn.classList.toggle("copied", ok);
+        setTimeout(function () {
+          btn.textContent = "Copy";
+          btn.classList.remove("copied");
+        }, 2000);
+      }
+
+      function fallback() {
+        try {
+          var ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          var ok = document.execCommand("copy");
+          document.body.removeChild(ta);
+          done(ok);
+        } catch (e) {
+          done(false);
+        }
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { done(true); }, fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+
+  var KEY = "roastlog-dns-progress-v1";
+  var steps = Array.prototype.slice.call(document.querySelectorAll("li.step"));
+  var fill = document.getElementById("fill");
+  var label = document.getElementById("label");
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function save(state) {
+    try {
+      localStorage.setItem(KEY, JSON.stringify(state));
+    } catch (e) {
+      /* progress will not persist; the page still works */
+    }
+  }
+
+  var state = load();
+
+  function render() {
+    var done = 0;
+    steps.forEach(function (li, i) {
+      var on = !!state[li.dataset.id];
+      if (on) { done++; }
+      li.classList.toggle("done", on);
+      var head = li.querySelector(".step-head");
+      head.setAttribute("aria-pressed", on ? "true" : "false");
+      li.querySelector(".tick").textContent = on ? "✓" : String(i + 1);
+    });
+    fill.style.width = (done / steps.length * 100) + "%";
+    label.textContent = done + " / " + steps.length;
+  }
+
+  steps.forEach(function (li) {
+    var head = li.querySelector(".step-head");
+    function toggle() {
+      state[li.dataset.id] = !state[li.dataset.id];
+      save(state);
+      render();
+    }
+    head.addEventListener("click", toggle);
+    head.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+    });
+  });
+
+  render();
+})();
+</script>

@@ -1,0 +1,37 @@
+{
+  "eval_id": 1,
+  "eval_name": "namecheap-dns-to-vercel",
+  "prompt": "walk me through pointing my namecheap domain at my vercel deployment. domain is roastlog.coffee, the vercel project is roastlog-web. i want the apex and www both working",
+  "assertions": [
+    {
+      "text": "Deliverable is a self-contained HTML page, not only a chat reply or markdown file"
+    },
+    {
+      "text": "Every command and pasteable value sits in a copy-to-clipboard block with a button"
+    },
+    {
+      "text": "Copy blocks use white-space:pre so long values cannot soft-wrap into the copied text"
+    },
+    {
+      "text": "Links target specific console pages rather than product homepages"
+    },
+    {
+      "text": "Checklist progress persists to localStorage inside try/catch"
+    },
+    {
+      "text": "At least one warning is placed inside the step where it fires, not only in a preamble"
+    },
+    {
+      "text": "Names at least one concrete failure signature (symptom to cause)"
+    },
+    {
+      "text": "Multi-command shell sequences are wrapped as a single paste (heredoc or one block)"
+    },
+    {
+      "text": "States whether re-running a step is safe, or makes scripts idempotent"
+    },
+    {
+      "text": "Prerequisites that could block the whole procedure are front-loaded before step 1 work"
+    }
+  ]
+}

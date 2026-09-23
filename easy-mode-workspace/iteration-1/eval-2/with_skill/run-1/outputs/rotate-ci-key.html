@@ -1,0 +1,1080 @@
+<title>Rotating github-actions-deployer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=JetBrains+Mono:wght@400;600&family=Source+Serif+4:ital,opsz,wght@0,8..60,400;0,8..60,600;1,8..60,400&display=swap">
+
+<style>
+:root {
+  --ground: #eef1f1;
+  --surface: #fbfcfc;
+  --surface-2: #f3f6f5;
+  --ink: #16201f;
+  --ink-soft: #55625f;
+  --ink-faint: #7d8a87;
+  --line: #d2dbd9;
+  --line-strong: #b8c4c1;
+  --accent: #0c5f63;
+  --accent-ink: #094a4d;
+  --accent-soft: #dfeceb;
+  --ok: #2c6b41;
+  --ok-soft: #e2eee4;
+  --warn: #8a5510;
+  --warn-soft: #f6ebda;
+  --danger: #982c24;
+  --danger-soft: #f7e5e2;
+  --code-bg: #10201f;
+  --code-ink: #dfeae7;
+  --code-line: #243936;
+  --shadow: 0 1px 2px rgba(16, 32, 31, .06), 0 8px 24px -16px rgba(16, 32, 31, .3);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ground: #0d1414;
+    --surface: #151d1d;
+    --surface-2: #1b2524;
+    --ink: #e7eeec;
+    --ink-soft: #a0adaa;
+    --ink-faint: #7c8a8a;
+    --line: #27332f;
+    --line-strong: #35443f;
+    --accent: #56b6ae;
+    --accent-ink: #7fcdc5;
+    --accent-soft: #14302f;
+    --ok: #74c28d;
+    --ok-soft: #162c1f;
+    --warn: #d9a552;
+    --warn-soft: #2e2415;
+    --danger: #e58175;
+    --danger-soft: #33191a;
+    --code-bg: #0a1211;
+    --code-ink: #d7e4e0;
+    --code-line: #1e2c2a;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 28px -18px rgba(0, 0, 0, .8);
+  }
+}
+:root[data-theme="dark"] {
+  --ground: #0d1414;
+  --surface: #151d1d;
+  --surface-2: #1b2524;
+  --ink: #e7eeec;
+  --ink-soft: #a0adaa;
+  --ink-faint: #7c8a8a;
+  --line: #27332f;
+  --line-strong: #35443f;
+  --accent: #56b6ae;
+  --accent-ink: #7fcdc5;
+  --accent-soft: #14302f;
+  --ok: #74c28d;
+  --ok-soft: #162c1f;
+  --warn: #d9a552;
+  --warn-soft: #2e2415;
+  --danger: #e58175;
+  --danger-soft: #33191a;
+  --code-bg: #0a1211;
+  --code-ink: #d7e4e0;
+  --code-line: #1e2c2a;
+  --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 10px 28px -18px rgba(0, 0, 0, .8);
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--ground);
+  color: var(--ink);
+  font-family: "Source Serif 4", Georgia, "Times New Roman", serif;
+  font-size: 17px;
+  line-height: 1.6;
+  -webkit-text-size-adjust: 100%;
+}
+
+.wrap {
+  max-width: 47rem;
+  margin: 0 auto;
+  padding: 0 1.1rem 5rem;
+}
+
+/* ---------- sticky progress ---------- */
+.bar {
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: color-mix(in srgb, var(--ground) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--line);
+}
+.bar-inner {
+  max-width: 47rem;
+  margin: 0 auto;
+  padding: .6rem 1.1rem .55rem;
+  display: flex;
+  align-items: center;
+  gap: .75rem;
+}
+.bar-name {
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: .68rem;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  white-space: nowrap;
+}
+.track {
+  flex: 1;
+  height: 5px;
+  background: var(--line);
+  border-radius: 3px;
+  overflow: hidden;
+}
+#fill {
+  display: block;
+  height: 100%;
+  width: 0;
+  background: var(--accent);
+  transition: width .25s ease;
+}
+#label {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: .72rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+/* ---------- header ---------- */
+header.head { padding: 2.6rem 0 1.4rem; }
+.eyebrow {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: .7rem;
+  letter-spacing: .16em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin: 0 0 .9rem;
+}
+h1 {
+  font-family: Archivo, "Helvetica Neue", Arial, sans-serif;
+  font-weight: 700;
+  font-size: clamp(1.85rem, 6vw, 2.7rem);
+  line-height: 1.08;
+  letter-spacing: -.022em;
+  margin: 0 0 .7rem;
+  text-wrap: balance;
+}
+h1 .mono {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-weight: 600;
+  font-size: .82em;
+  letter-spacing: -.02em;
+}
+.standfirst {
+  font-size: 1.08rem;
+  color: var(--ink-soft);
+  margin: 0;
+  max-width: 34rem;
+}
+
+/* ---------- model strip ---------- */
+.model {
+  display: grid;
+  gap: .1rem;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+  background: var(--line);
+  margin: 1.8rem 0 0;
+}
+@media (min-width: 42rem) { .model { grid-template-columns: repeat(3, 1fr); } }
+.model div {
+  background: var(--surface);
+  padding: .85rem .95rem;
+}
+.model b {
+  display: block;
+  font-family: Archivo, sans-serif;
+  font-size: .74rem;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--accent);
+  margin-bottom: .3rem;
+}
+.model p { margin: 0; font-size: .93rem; line-height: 1.5; color: var(--ink-soft); }
+
+/* ---------- panels ---------- */
+.panel {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  padding: 1.15rem 1.15rem 1.25rem;
+  margin: 1.5rem 0 0;
+  box-shadow: var(--shadow);
+}
+.panel > h2, .panel > h3 {
+  font-family: Archivo, sans-serif;
+  font-size: .95rem;
+  font-weight: 600;
+  letter-spacing: .01em;
+  margin: 0 0 .55rem;
+}
+.panel p { margin: 0 0 .7rem; font-size: .96rem; }
+.panel p:last-child { margin-bottom: 0; }
+.panel ul { margin: 0; padding-left: 1.15rem; font-size: .96rem; }
+.panel li { margin-bottom: .38rem; }
+.panel li:last-child { margin-bottom: 0; }
+
+.flag { border-left: 3px solid var(--warn); }
+.flag > h2 { color: var(--warn); }
+
+/* ---------- variables form ---------- */
+.vars { display: grid; gap: .8rem; }
+@media (min-width: 40rem) { .vars { grid-template-columns: 1fr 1fr; } }
+.vars .full { grid-column: 1 / -1; }
+.field { display: flex; flex-direction: column; gap: .3rem; }
+.field label {
+  font-family: Archivo, sans-serif;
+  font-size: .72rem;
+  font-weight: 600;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+}
+.field input {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: .88rem;
+  padding: .6rem .65rem;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--ink);
+  min-height: 44px;
+}
+.field input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+
+/* ---------- steps ---------- */
+ol.steps { list-style: none; margin: 2.2rem 0 0; padding: 0; display: flex; flex-direction: column; gap: .85rem; }
+li.step {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+.step-head {
+  display: flex;
+  align-items: flex-start;
+  gap: .8rem;
+  padding: .95rem 1rem;
+  cursor: pointer;
+  user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.step-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.tick {
+  flex: none;
+  width: 1.85rem;
+  height: 1.85rem;
+  border-radius: 4px;
+  border: 1px solid var(--line-strong);
+  background: var(--surface-2);
+  color: var(--ink-soft);
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: .82rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.step-head h2 {
+  font-family: Archivo, sans-serif;
+  font-size: 1.06rem;
+  font-weight: 600;
+  letter-spacing: -.012em;
+  line-height: 1.3;
+  margin: .15rem 0 0;
+  text-wrap: balance;
+}
+.optional {
+  display: inline-block;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: .62rem;
+  letter-spacing: .1em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  border: 1px solid var(--line-strong);
+  border-radius: 3px;
+  padding: .08rem .32rem;
+  vertical-align: .18em;
+  margin-left: .45rem;
+}
+li.step.done .tick { background: var(--accent); border-color: var(--accent); color: var(--surface); }
+li.step.done .step-head h2 { color: var(--ink-faint); }
+li.step.done .step-body { opacity: .62; }
+
+.step-body { padding: 0 1rem 1.2rem; }
+.step-body > *:first-child { margin-top: 0; }
+.step-body p { margin: 0 0 .85rem; }
+.step-body ul { margin: 0 0 .85rem; padding-left: 1.15rem; }
+.step-body li { margin-bottom: .35rem; }
+.step-body h3 {
+  font-family: Archivo, sans-serif;
+  font-size: .78rem;
+  font-weight: 600;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 1.4rem 0 .5rem;
+}
+
+/* ---------- callouts ---------- */
+.note {
+  border-radius: 4px;
+  padding: .75rem .85rem;
+  margin: 0 0 .9rem;
+  font-size: .93rem;
+  line-height: 1.5;
+}
+.note :last-child { margin-bottom: 0; }
+.note p { margin: 0 0 .5rem; font-size: .93rem; }
+.note b {
+  font-family: Archivo, sans-serif;
+  font-weight: 600;
+  font-size: .72rem;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+  display: block;
+  margin-bottom: .28rem;
+}
+.note.fail { background: var(--danger-soft); color: var(--ink); }
+.note.fail b { color: var(--danger); }
+.note.care { background: var(--warn-soft); }
+.note.care b { color: var(--warn); }
+.note.good { background: var(--ok-soft); }
+.note.good b { color: var(--ok); }
+.note.calm { background: var(--surface-2); border: 1px solid var(--line); }
+.note.calm b { color: var(--accent); }
+
+/* ---------- code ---------- */
+.copybox { position: relative; margin: 0 0 .9rem; }
+.copybox pre {
+  margin: 0;
+  background: var(--code-bg);
+  color: var(--code-ink);
+  border: 1px solid var(--code-line);
+  border-radius: 4px;
+  padding: .85rem .85rem 2.9rem;
+  overflow-x: auto;
+  font-size: .8rem;
+  line-height: 1.55;
+}
+.copybox code {
+  white-space: pre;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+.copybox code .v { color: #ffd28a; }
+.copybtn {
+  position: absolute;
+  right: .55rem;
+  bottom: .55rem;
+  font-family: Archivo, sans-serif;
+  font-size: .74rem;
+  font-weight: 600;
+  letter-spacing: .04em;
+  color: var(--code-ink);
+  background: rgba(255, 255, 255, .09);
+  border: 1px solid rgba(255, 255, 255, .22);
+  border-radius: 4px;
+  padding: .42rem .8rem;
+  min-height: 34px;
+  cursor: pointer;
+}
+.copybtn:hover { background: rgba(255, 255, 255, .16); }
+.copybtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.copybtn.copied { background: var(--ok); border-color: var(--ok); color: #fff; }
+.caption {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: .68rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  color: var(--ink-faint);
+  margin: 0 0 .35rem;
+}
+
+code.inline {
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: .84em;
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 3px;
+  padding: .05em .3em;
+  white-space: nowrap;
+}
+
+a { color: var(--accent-ink); text-underline-offset: .17em; text-decoration-thickness: 1px; }
+a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.golink {
+  display: inline-flex;
+  align-items: center;
+  gap: .4rem;
+  font-family: Archivo, sans-serif;
+  font-size: .88rem;
+  font-weight: 600;
+  text-decoration: none;
+  color: var(--accent-ink);
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  padding: .55rem .8rem;
+  min-height: 44px;
+  background: var(--surface-2);
+  margin: 0 .4rem .6rem 0;
+}
+.golink:hover { border-color: var(--accent); }
+.golink span { color: var(--ink-faint); font-weight: 500; }
+
+footer.foot {
+  margin-top: 2.6rem;
+  padding-top: 1.2rem;
+  border-top: 1px solid var(--line);
+  font-size: .9rem;
+  color: var(--ink-faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { transition: none !important; animation: none !important; }
+}
+</style>
+
+<div class="bar">
+  <div class="bar-inner">
+    <span class="bar-name">Key rotation</span>
+    <span class="track"><span id="fill"></span></span>
+    <span id="label">0 / 8</span>
+  </div>
+</div>
+
+<div class="wrap">
+
+<header class="head">
+  <p class="eyebrow">Runbook &middot; AWS IAM</p>
+  <h1>Rotating <span class="mono">github-actions-deployer</span></h1>
+  <p class="standfirst">Swap the CI access key with no failed builds and no window where the pipeline has no working credential. Work top to bottom; your place is saved if you put the phone down.</p>
+</header>
+
+<div class="panel flag">
+  <h2>First: these secrets are not in a9-tracker</h2>
+  <p>I checked the repo you are sitting in. <code class="inline">a9-tracker</code> has no AWS anywhere in it &mdash; <code class="inline">.github/workflows/deploy.yml</code> deploys to Firebase Hosting and authenticates to Google through Workload Identity Federation, which is keyless by design. Its only Actions secrets are <code class="inline">VITE_RECAPTCHA_SITE_KEY</code> and <code class="inline">VITE_APPCHECK_DEBUG_TOKEN</code>, plus the variables <code class="inline">GCP_WIF_PROVIDER</code> and <code class="inline">GCP_DEPLOY_SERVICE_ACCOUNT</code>.</p>
+  <p>So <code class="inline">AWS_ACCESS_KEY_ID</code> / <code class="inline">AWS_SECRET_ACCESS_KEY</code> belong to a different repo. Name it below and every command and link on this page will point at the right place.</p>
+</div>
+
+<div class="model">
+  <div>
+    <b>Two keys at once</b>
+    <p>An IAM user can hold exactly two access keys. That second slot is the whole trick: the new key works before the old one stops.</p>
+  </div>
+  <div>
+    <b>Secrets bind at job start</b>
+    <p>A job reads secret values when it starts. Changing a secret cannot disturb a run that is already going.</p>
+  </div>
+  <div>
+    <b>Deactivate before delete</b>
+    <p>Inactive is instantly reversible; deleted is forever. Every rollback on this page is a one-line flip back to Active.</p>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Fill these in once</h2>
+  <p style="color: var(--ink-soft); font-size: .93rem;">Everything below &mdash; commands, links, the trust policy &mdash; rewrites itself from these three. Saved in this browser.</p>
+  <div class="vars">
+    <div class="field">
+      <label for="in-repo">Repo holding the secrets</label>
+      <input id="in-repo" type="text" autocapitalize="off" autocorrect="off" spellcheck="false" placeholder="owner/repo">
+    </div>
+    <div class="field">
+      <label for="in-key">Old access key ID (from step 1)</label>
+      <input id="in-key" type="text" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="AKIA...">
+    </div>
+    <div class="field full">
+      <label for="in-acct">AWS account ID (step 8 only)</label>
+      <input id="in-acct" type="text" inputmode="numeric" autocorrect="off" spellcheck="false" placeholder="123456789012">
+    </div>
+  </div>
+</div>
+
+<div class="panel">
+  <h2>Before you start</h2>
+  <ul>
+    <li><b style="font-family: Archivo, sans-serif; font-weight: 600;">Run as yourself, not as the CI user.</b> Step 1 prints who you are; if it comes back as <code class="inline">github-actions-deployer</code>, stop &mdash; you would be rotating the key out from under the shell you are using.</li>
+    <li><b style="font-family: Archivo, sans-serif; font-weight: 600;">IAM permissions you need</b> on that user: <code class="inline">iam:ListAccessKeys</code>, <code class="inline">iam:GetAccessKeyLastUsed</code>, <code class="inline">iam:CreateAccessKey</code>, <code class="inline">iam:UpdateAccessKey</code>, <code class="inline">iam:DeleteAccessKey</code>, plus <code class="inline">cloudtrail:LookupEvents</code> for step 2. Finding out at step 3 that you lack <code class="inline">CreateAccessKey</code> means waiting on someone else mid-rotation.</li>
+    <li><b style="font-family: Archivo, sans-serif; font-weight: 600;">Admin on the GitHub repo.</b> Only admins can write Actions secrets.</li>
+    <li><b style="font-family: Archivo, sans-serif; font-weight: 600;">Tools:</b> AWS CLI v2, <code class="inline">jq</code>, and the <code class="inline">gh</code> CLI signed in. No local setup? <a href="https://console.aws.amazon.com/cloudshell/home">AWS CloudShell</a> has the AWS CLI and jq ready and works on a phone; each step that needs <code class="inline">gh</code> has a console path.</li>
+    <li><b style="font-family: Archivo, sans-serif; font-weight: 600;">Pick a quiet moment.</b> You want to watch one full pipeline run go green before you disable anything. Not ten minutes before a release.</li>
+  </ul>
+</div>
+
+<ol class="steps">
+
+<li class="step" data-id="inventory">
+  <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+    <span class="tick">1</span>
+    <h2>See what keys the user already has</h2>
+  </div>
+  <div class="step-body">
+    <p>You cannot plan the swap without knowing whether the second slot is free and which key the pipeline is actually using. One paste does all of it.</p>
+<div class="copybox">
+<pre><code id="c-inventory">cat &gt; /tmp/rotate-1-inventory.sh &lt;&lt;'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+USER_NAME=github-actions-deployer
+
+echo "== Running as (must NOT be the CI user) =="
+aws sts get-caller-identity --output table
+
+echo
+echo "== Access keys on ${USER_NAME} =="
+aws iam list-access-keys --user-name "$USER_NAME" \
+  --query 'AccessKeyMetadata[].[AccessKeyId,Status,CreateDate]' --output table
+
+echo
+echo "== Last time each key was used =="
+for k in $(aws iam list-access-keys --user-name "$USER_NAME" \
+             --query 'AccessKeyMetadata[].AccessKeyId' --output text); do
+  echo "--- $k"
+  aws iam get-access-key-last-used --access-key-id "$k" \
+    --query 'AccessKeyLastUsed.[LastUsedDate,ServiceName,Region]' --output table
+done
+SH
+bash /tmp/rotate-1-inventory.sh</code></pre>
+  <button class="copybtn" type="button" data-copy="c-inventory">Copy</button>
+</div>
+    <p>Read-only. Safe to run as many times as you like.</p>
+
+    <div class="note good">
+      <b>What good looks like</b>
+      <p>One key, <code class="inline">Active</code>, with a <code class="inline">LastUsedDate</code> from the last day or two. Put its ID into the <b style="display:inline;font-size:1em;letter-spacing:0;text-transform:none;">Old access key ID</b> box at the top of this page now &mdash; the rest of the steps need it and you should never have to retype it.</p>
+    </div>
+
+    <div class="note fail">
+      <b>If two keys are already listed</b>
+      <p>The second slot is taken and step 3 will fail with <code class="inline">LimitExceeded: Cannot exceed quota for AccessKeysPerUser: 2</code>. Usually the extra one is a stale leftover from a previous rotation &mdash; check its <code class="inline">LastUsedDate</code>. If nothing has used it for weeks, clear the slot first:</p>
+<div class="copybox">
+<pre><code id="c-clearslot">aws iam delete-access-key --user-name github-actions-deployer \
+  --access-key-id <span class="v" data-var="oldkey">AKIAOLDKEYEXAMPLE123</span></code></pre>
+  <button class="copybtn" type="button" data-copy="c-clearslot">Copy</button>
+</div>
+      <p>Point that at the <em>stale</em> key ID, not the one in use. Deletion cannot be undone, so if you are unsure, set it <code class="inline">--status Inactive</code> first (step 6 has the command) and see if anything screams.</p>
+    </div>
+
+    <div class="note fail">
+      <b>If you see <code class="inline">NoSuchEntity: The user with name github-actions-deployer cannot be found</code></b>
+      <p>Your CLI is pointed at the wrong AWS account. Compare the account number in the first table against the account your pipeline deploys to, then re-run with the right profile: <code class="inline">AWS_PROFILE=that-one bash /tmp/rotate-1-inventory.sh</code>.</p>
+    </div>
+
+    <div class="note fail">
+      <b>If you see <code class="inline">AccessDenied</code> on ListAccessKeys</b>
+      <p>Your own IAM identity is missing the permissions listed in "Before you start". Get them added before going further &mdash; a rotation abandoned halfway is worse than one not started.</p>
+    </div>
+  </div>
+</li>
+
+<li class="step" data-id="consumers">
+  <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+    <span class="tick">2</span>
+    <h2>Find everything else using this key</h2>
+  </div>
+  <div class="step-body">
+    <p>This is the step people skip and regret. An IAM user's key tends to spread: a second repo, a nightly job, a Terraform run, somebody's laptop from the week it was set up. Rotating breaks every one of them, and you find out days later. CloudTrail knows who has been calling with it.</p>
+<div class="copybox">
+<pre><code id="c-consumers">cat &gt; /tmp/rotate-2-consumers.sh &lt;&lt;'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+OLD_KEY_ID=<span class="v" data-var="oldkey">AKIAOLDKEYEXAMPLE123</span>
+
+echo "== Callers seen using ${OLD_KEY_ID} (last 90 days, this region) =="
+aws cloudtrail lookup-events \
+  --lookup-attributes AttributeKey=AccessKeyId,AttributeValue="$OLD_KEY_ID" \
+  --max-results 50 \
+  --query 'Events[].CloudTrailEvent' --output text \
+  | jq -rR 'fromjson? | [.eventTime, .eventName, .sourceIPAddress, (.userAgent // "")[0:44]] | @tsv' \
+  | sort -u
+SH
+bash /tmp/rotate-2-consumers.sh</code></pre>
+  <button class="copybtn" type="button" data-copy="c-consumers">Copy</button>
+</div>
+    <p>Read-only, safe to re-run. GitHub-hosted runners show up as Azure IP ranges with an <code class="inline">aws-cli</code> or <code class="inline">aws-sdk</code> user agent. A residential IP or a browser-ish agent is a human, and that human needs telling.</p>
+
+    <div class="note care">
+      <b>What this will not show you</b>
+      <p>Only the region you ran it in, only the last 90 days, and only management events &mdash; plain <code class="inline">s3:PutObject</code> traffic is invisible unless data events are switched on for that bucket. Empty output means "nothing found here", not "nothing uses this key". If you have workloads in other regions, re-run with <code class="inline">AWS_REGION=eu-west-1</code> in front of the <code class="inline">bash</code> line.</p>
+    </div>
+
+    <div class="note calm">
+      <b>Also worth a look</b>
+      <p><a href="https://console.aws.amazon.com/cloudtrail/home#/events">CloudTrail event history</a> in the console, filtered by access key, is the same data with a date picker &mdash; easier on a phone than reading a wide table.</p>
+    </div>
+  </div>
+</li>
+
+<li class="step" data-id="newkey">
+  <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+    <span class="tick">3</span>
+    <h2>Create the new key and write it straight into the repo secrets</h2>
+  </div>
+  <div class="step-body">
+    <p>The new secret is displayed exactly once, ever. So don't display it: this script pipes it directly from the AWS API into <code class="inline">gh secret set</code>. It never lands on screen, never enters your shell history, and there is nothing for you to copy by hand.</p>
+    <p>Nothing here disturbs the pipeline. The old key stays <code class="inline">Active</code>, and runs already in flight hold the old values until they finish.</p>
+<div class="copybox">
+<pre><code id="c-newkey">cat &gt; /tmp/rotate-3-newkey.sh &lt;&lt;'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+USER_NAME=github-actions-deployer
+REPO=<span class="v" data-var="repo">OWNER/REPO</span>
+
+command -v jq &gt;/dev/null || { echo "jq is not installed"; exit 1; }
+command -v gh &gt;/dev/null || { echo "gh CLI is not installed - use the console path instead"; exit 1; }
+gh auth status &gt;/dev/null
+
+COUNT="$(aws iam list-access-keys --user-name "$USER_NAME" \
+           --query 'length(AccessKeyMetadata)' --output text)"
+if [ "$COUNT" -ge 2 ]; then
+  echo "STOP: ${USER_NAME} already has 2 access keys - AWS allows no more."
+  echo "Clear the stale slot first (step 1), then re-run this."
+  exit 1
+fi
+
+echo "==&gt; Creating a second access key on ${USER_NAME}..."
+NEW="$(aws iam create-access-key --user-name "$USER_NAME" --output json)"
+NEW_ID="$(printf '%s' "$NEW" | jq -r '.AccessKey.AccessKeyId')"
+NEW_SECRET="$(printf '%s' "$NEW" | jq -r '.AccessKey.SecretAccessKey')"
+NEW=""
+echo "    new key id: ${NEW_ID}"
+
+echo "==&gt; Waiting for it to go live (IAM is eventually consistent)..."
+for attempt in 1 2 3 4 5 6; do
+  if env -u AWS_SESSION_TOKEN -u AWS_PROFILE \
+       AWS_ACCESS_KEY_ID="$NEW_ID" AWS_SECRET_ACCESS_KEY="$NEW_SECRET" \
+       aws sts get-caller-identity &gt;/dev/null 2&gt;&amp;1; then
+    echo "    live"
+    break
+  fi
+  echo "    not active yet, retrying in $((attempt * 5))s"
+  sleep $((attempt * 5))
+done
+
+env -u AWS_SESSION_TOKEN -u AWS_PROFILE \
+  AWS_ACCESS_KEY_ID="$NEW_ID" AWS_SECRET_ACCESS_KEY="$NEW_SECRET" \
+  aws sts get-caller-identity --output table
+
+echo "==&gt; Writing both secrets on ${REPO}..."
+printf '%s' "$NEW_ID"     | gh secret set AWS_ACCESS_KEY_ID     --repo "$REPO"
+printf '%s' "$NEW_SECRET" | gh secret set AWS_SECRET_ACCESS_KEY --repo "$REPO"
+NEW_SECRET=""
+
+echo
+echo "Done. ${NEW_ID} is in the repo secrets."
+echo "The old key is still Active - nothing has broken yet, by design."
+SH
+bash /tmp/rotate-3-newkey.sh</code></pre>
+  <button class="copybtn" type="button" data-copy="c-newkey">Copy</button>
+</div>
+
+    <div class="note good">
+      <b>What good looks like</b>
+      <p>An identity table showing <code class="inline">arn:aws:iam::&lt;account&gt;:user/github-actions-deployer</code> &mdash; proof the new key authenticates &mdash; then two lines from <code class="inline">gh</code> confirming both secrets were set. Note the new key ID down; step 5 uses it.</p>
+    </div>
+
+    <div class="note care">
+      <b>Re-running this one is not free</b>
+      <p>Every successful run creates a key, and there are only two slots. The guard at the top stops a blind second run. If the script died <em>after</em> creating the key but before writing the secrets, that key's secret is gone for good &mdash; delete it and start the step over:</p>
+<div class="copybox">
+<pre><code id="c-abandon">aws iam list-access-keys --user-name github-actions-deployer \
+  --query 'AccessKeyMetadata[].[AccessKeyId,CreateDate]' --output table
+# then, for the one created just now:
+aws iam delete-access-key --user-name github-actions-deployer --access-key-id AKIA_THE_NEW_ONE</code></pre>
+  <button class="copybtn" type="button" data-copy="c-abandon">Copy</button>
+</div>
+    </div>
+
+    <h3>No gh CLI? The console path</h3>
+    <p>Create the key in <a data-link="https://console.aws.amazon.com/iam/home#/users/details/github-actions-deployer?section=security_credentials" href="https://console.aws.amazon.com/iam/home#/users/details/github-actions-deployer?section=security_credentials">the IAM user's Security credentials tab</a> (Create access key &rarr; Third-party service), then paste both values into <a data-link="https://github.com/{repo}/settings/secrets/actions" href="https://github.com/OWNER/REPO/settings/secrets/actions">the repo's Actions secrets</a>, updating the two existing entries rather than making new ones.</p>
+    <p class="caption">Deep links</p>
+    <a class="golink" data-link="https://console.aws.amazon.com/iam/home#/users/details/github-actions-deployer?section=security_credentials" href="https://console.aws.amazon.com/iam/home#/users/details/github-actions-deployer?section=security_credentials">IAM &rsaquo; github-actions-deployer <span>security credentials</span></a>
+    <a class="golink" data-link="https://github.com/{repo}/settings/secrets/actions" href="https://github.com/OWNER/REPO/settings/secrets/actions">GitHub &rsaquo; Actions secrets <span data-var="repo">OWNER/REPO</span></a>
+
+    <div class="note fail">
+      <b>Pasting by hand: the one thing that goes wrong</b>
+      <p>The secret must land as a single line with no leading or trailing space and no line break. A wrapped copy that drags in a newline is invisible in the secrets UI and surfaces in CI as <code class="inline">SignatureDoesNotMatch</code> or <code class="inline">The security token included in the request is invalid</code> &mdash; both of which read like an AWS configuration problem and send you looking in entirely the wrong place. If you see either right after a manual paste, re-paste the secret; do not go debugging IAM policies.</p>
+    </div>
+  </div>
+</li>
+
+<li class="step" data-id="scopes">
+  <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+    <span class="tick">4</span>
+    <h2>Make sure nothing is shadowing the secret you just set</h2>
+  </div>
+  <div class="step-body">
+    <p>GitHub resolves a secret name at three levels, and the most specific wins: <b>environment</b> beats <b>repository</b> beats <b>organization</b>. If the workflow job declares <code class="inline">environment: production</code> and an environment secret of the same name exists, the repo secret you just wrote is ignored entirely and the pipeline keeps using the old key.</p>
+<div class="copybox">
+<pre><code id="c-scopes">cat &gt; /tmp/rotate-4-scopes.sh &lt;&lt;'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+REPO=<span class="v" data-var="repo">OWNER/REPO</span>
+OWNER="${REPO%%/*}"
+
+echo "== Repository secrets =="
+gh secret list --repo "$REPO"
+
+echo
+echo "== Environment secrets (these WIN over repository secrets) =="
+ENVS="$(gh api "/repos/${REPO}/environments" --jq '.environments[].name' 2&gt;/dev/null || true)"
+if [ -z "$ENVS" ]; then
+  echo "(no environments)"
+else
+  for e in $ENVS; do
+    echo "--- $e"
+    gh secret list --repo "$REPO" --env "$e" || true
+  done
+fi
+
+echo
+echo "== Organization secrets =="
+gh secret list --org "$OWNER" 2&gt;/dev/null || echo "(personal account, or no org access)"
+
+echo
+echo "== Other workflows under ${OWNER} reading the same secret name =="
+gh search code --owner "$OWNER" --filename '*.yml' 'AWS_ACCESS_KEY_ID' 2&gt;/dev/null || true
+SH
+bash /tmp/rotate-4-scopes.sh</code></pre>
+  <button class="copybtn" type="button" data-copy="c-scopes">Copy</button>
+</div>
+    <p>Read-only, safe to re-run. Secret <em>values</em> are never shown &mdash; only names and when each was last updated, which is exactly what you need: the two you just wrote should carry today's date.</p>
+
+    <div class="note fail">
+      <b>If the pipeline still authenticates as the old key after step 3</b>
+      <p>This is the cause nine times out of ten. Look for <code class="inline">AWS_ACCESS_KEY_ID</code> under an environment, and update it there too:</p>
+<div class="copybox">
+<pre><code id="c-envsecret">gh secret set AWS_ACCESS_KEY_ID --repo <span class="v" data-var="repo">OWNER/REPO</span> --env production
+gh secret set AWS_SECRET_ACCESS_KEY --repo <span class="v" data-var="repo">OWNER/REPO</span> --env production</code></pre>
+  <button class="copybtn" type="button" data-copy="c-envsecret">Copy</button>
+</div>
+      <p>Run without <code class="inline">--body</code>, <code class="inline">gh</code> prompts for the value on a hidden line, so it stays out of your history.</p>
+    </div>
+
+    <div class="note care">
+      <b>If another repo turned up in that last search</b>
+      <p>It is sharing this one IAM user, and step 6 will break it. Either update its secrets the same way now, or give it its own IAM user before you deactivate anything.</p>
+    </div>
+    <a class="golink" data-link="https://github.com/{repo}/settings/environments" href="https://github.com/OWNER/REPO/settings/environments">GitHub &rsaquo; Environments <span data-var="repo">OWNER/REPO</span></a>
+  </div>
+</li>
+
+<li class="step" data-id="verify">
+  <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+    <span class="tick">5</span>
+    <h2>Run the pipeline and prove the new key is the one working</h2>
+  </div>
+  <div class="step-body">
+    <p>Both keys are valid right now, which means a green build is not by itself proof &mdash; it could still be running on the old key from an environment secret you missed. The proof is AWS telling you the <em>new</em> key was used minutes ago.</p>
+<div class="copybox">
+<pre><code id="c-run">gh workflow list --repo <span class="v" data-var="repo">OWNER/REPO</span>
+gh run list --repo <span class="v" data-var="repo">OWNER/REPO</span> --limit 5</code></pre>
+  <button class="copybtn" type="button" data-copy="c-run">Copy</button>
+</div>
+    <p>Then start one and watch it, putting your workflow's filename in place of <code class="inline">deploy.yml</code>:</p>
+<div class="copybox">
+<pre><code id="c-watch">gh workflow run deploy.yml --repo <span class="v" data-var="repo">OWNER/REPO</span>
+sleep 8
+gh run watch --repo <span class="v" data-var="repo">OWNER/REPO</span> --exit-status</code></pre>
+  <button class="copybtn" type="button" data-copy="c-watch">Copy</button>
+</div>
+    <p>If the workflow has no <code class="inline">workflow_dispatch</code> trigger there is no button to press &mdash; push a trivial commit, or hit <b>Re-run jobs</b> on the most recent run. A re-run resolves secrets fresh, so it picks up the new values.</p>
+
+    <p class="caption">Then confirm which key did the work</p>
+<div class="copybox">
+<pre><code id="c-lastused">aws iam list-access-keys --user-name github-actions-deployer \
+  --query 'AccessKeyMetadata[].AccessKeyId' --output text \
+  | tr '\t' '\n' \
+  | while read -r k; do
+      printf '%s  ' "$k"
+      aws iam get-access-key-last-used --access-key-id "$k" \
+        --query 'AccessKeyLastUsed.LastUsedDate' --output text
+    done</code></pre>
+  <button class="copybtn" type="button" data-copy="c-lastused">Copy</button>
+</div>
+
+    <div class="note good">
+      <b>What good looks like</b>
+      <p>The new key ID carries a timestamp from the last few minutes; the old one is stuck at whenever it last ran. That, plus a green run, is the go-ahead for step 6.</p>
+    </div>
+
+    <div class="note care">
+      <b>Give it a few minutes before you judge</b>
+      <p><code class="inline">LastUsedDate</code> is recorded with roughly fifteen-minute granularity and can lag. A blank or stale timestamp thirty seconds after a build is normal; wait and re-run the check rather than concluding the swap failed.</p>
+    </div>
+
+    <div class="note fail">
+      <b>If the run fails here</b>
+      <p>You have lost nothing &mdash; the old key is still Active, so reverting is just putting the old key ID and secret back into the repo secrets, and the next run is green again. Two errors, two very different meanings: <code class="inline">InvalidClientTokenId</code> or <code class="inline">SignatureDoesNotMatch</code> means the credential itself is wrong (a bad paste, or the key not yet propagated &mdash; wait a minute and re-run). <code class="inline">AccessDenied</code> on a specific action means the credential is fine and the IAM policy is the problem &mdash; unrelated to the rotation, and not fixed by making another key.</p>
+    </div>
+    <a class="golink" data-link="https://github.com/{repo}/actions" href="https://github.com/OWNER/REPO/actions">GitHub &rsaquo; Actions runs <span data-var="repo">OWNER/REPO</span></a>
+  </div>
+</li>
+
+<li class="step" data-id="deactivate">
+  <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+    <span class="tick">6</span>
+    <h2>Deactivate the old key</h2>
+  </div>
+  <div class="step-body">
+    <p>Until this runs, you have not rotated anything &mdash; you have added a key. The old one still opens every door, which is the situation you set out to end.</p>
+<div class="copybox">
+<pre><code id="c-deactivate">aws iam update-access-key --user-name github-actions-deployer \
+  --access-key-id <span class="v" data-var="oldkey">AKIAOLDKEYEXAMPLE123</span> --status Inactive
+
+aws iam list-access-keys --user-name github-actions-deployer \
+  --query 'AccessKeyMetadata[].[AccessKeyId,Status]' --output table</code></pre>
+  <button class="copybtn" type="button" data-copy="c-deactivate">Copy</button>
+</div>
+    <p>Idempotent &mdash; setting an already-inactive key to Inactive changes nothing and errors on nothing.</p>
+
+    <div class="note good">
+      <b>What good looks like</b>
+      <p>Two rows: the new key <code class="inline">Active</code>, the old one <code class="inline">Inactive</code>. Anything still holding the old key starts failing within seconds, which is the point: this is how you discover a consumer that steps 2 and 4 missed, at a moment when undoing it takes one command.</p>
+    </div>
+
+    <div class="note calm">
+      <b>Instant rollback</b>
+      <p>Something unexpected went red? Flip it back and investigate afterwards. No new key needed, no secrets to re-enter.</p>
+<div class="copybox">
+<pre><code id="c-reactivate">aws iam update-access-key --user-name github-actions-deployer \
+  --access-key-id <span class="v" data-var="oldkey">AKIAOLDKEYEXAMPLE123</span> --status Active</code></pre>
+  <button class="copybtn" type="button" data-copy="c-reactivate">Copy</button>
+</div>
+    </div>
+  </div>
+</li>
+
+<li class="step" data-id="delete">
+  <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+    <span class="tick">7</span>
+    <h2>Wait out a full cycle, then delete the old key</h2>
+  </div>
+  <div class="step-body">
+    <p>Leave it Inactive long enough for every scheduled consumer to have had a turn &mdash; the nightly job, the weekly report, whatever has the longest interval. A day or two covers most setups. Nothing is at risk in the meantime: an inactive key grants nothing.</p>
+    <p>When the soak is done, check that it really did go unused, then delete it:</p>
+<div class="copybox">
+<pre><code id="c-delete">aws iam get-access-key-last-used \
+  --access-key-id <span class="v" data-var="oldkey">AKIAOLDKEYEXAMPLE123</span> \
+  --query 'AccessKeyLastUsed.[LastUsedDate,ServiceName]' --output table
+
+# Only if that timestamp predates the deactivation:
+aws iam delete-access-key --user-name github-actions-deployer \
+  --access-key-id <span class="v" data-var="oldkey">AKIAOLDKEYEXAMPLE123</span></code></pre>
+  <button class="copybtn" type="button" data-copy="c-delete">Copy</button>
+</div>
+
+    <div class="note care">
+      <b>Do not skip the deletion</b>
+      <p>An IAM user gets two key slots. Leaving the dead key parked in one means your next rotation opens with <code class="inline">LimitExceeded</code> &mdash; usually discovered by whoever is rotating in a hurry after a leak. Clear the slot while you are already here.</p>
+    </div>
+
+    <div class="note fail">
+      <b>Deletion is final</b>
+      <p>A deleted key ID never comes back; recovery means creating a different key and updating the secrets again. If the last-used timestamp is at all ambiguous, leave it Inactive another day &mdash; there is no cost to waiting.</p>
+    </div>
+  </div>
+</li>
+
+<li class="step" data-id="oidc">
+  <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+    <span class="tick">8</span>
+    <h2>Stop having a key to rotate<span class="optional">later</span></h2>
+  </div>
+  <div class="step-body">
+    <p>You have already built this exact thing once. <code class="inline">a9-tracker</code>'s deploy workflow holds no Google credential at all: GitHub mints an OIDC token, Google exchanges it for a short-lived one, and <code class="inline">scripts/setup-wif.sh</code> provisioned it in an afternoon. AWS has the same mechanism, and it retires this runbook permanently.</p>
+    <p>Three pieces: an IAM OIDC identity provider for <code class="inline">token.actions.githubusercontent.com</code>, a role that trusts only your repo, and a workflow that assumes it. The trust policy is the part worth getting exactly right &mdash; the <code class="inline">sub</code> condition is what stops any other repository on GitHub from assuming your role:</p>
+<div class="copybox">
+<pre><code id="c-trust">{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Effect": "Allow",
+      "Principal": {
+        "Federated": "arn:aws:iam::<span class="v" data-var="account">ACCOUNT_ID</span>:oidc-provider/token.actions.githubusercontent.com"
+      },
+      "Action": "sts:AssumeRoleWithWebIdentity",
+      "Condition": {
+        "StringEquals": {
+          "token.actions.githubusercontent.com:aud": "sts.amazonaws.com"
+        },
+        "StringLike": {
+          "token.actions.githubusercontent.com:sub": "repo:<span class="v" data-var="repo">OWNER/REPO</span>:*"
+        }
+      }
+    }
+  ]
+}</code></pre>
+  <button class="copybtn" type="button" data-copy="c-trust">Copy</button>
+</div>
+    <p>Then the workflow drops both secrets and gains a role:</p>
+<div class="copybox">
+<pre><code id="c-wf">permissions:
+  id-token: write   # required to mint the OIDC token
+  contents: read
+
+steps:
+  - uses: aws-actions/configure-aws-credentials@v4
+    with:
+      role-to-assume: arn:aws:iam::<span class="v" data-var="account">ACCOUNT_ID</span>:role/github-actions-deployer
+      aws-region: us-east-1</code></pre>
+  <button class="copybtn" type="button" data-copy="c-wf">Copy</button>
+</div>
+    <div class="note calm">
+      <b>Order matters if you do this</b>
+      <p>Get an OIDC run green <em>before</em> deleting the IAM user's keys, exactly as steps 5 to 7 do here. Ask me and I will write the AWS setup script the way <code class="inline">scripts/setup-wif.sh</code> does for Google &mdash; idempotent, re-runnable, with the propagation retries already in it.</p>
+    </div>
+  </div>
+</li>
+
+</ol>
+
+<footer class="foot">
+  <p>Written against the AWS IAM two-key model and GitHub Actions secret precedence, August 2026. If a step here does not match what you see on screen, tell me what came back and I will correct this page rather than patch it in chat &mdash; you will want the corrected version next time you rotate.</p>
+</footer>
+
+</div>
+
+<script>
+(function () {
+  "use strict";
+
+  /* ---------- fill-once variables ---------- */
+  var VKEY = "rotate-vars-v1";
+  var fields = { repo: "in-repo", oldkey: "in-key", account: "in-acct" };
+  var defaults = { repo: "OWNER/REPO", oldkey: "AKIAOLDKEYEXAMPLE123", account: "ACCOUNT_ID" };
+  var vals = {};
+
+  try {
+    var rawv = localStorage.getItem(VKEY);
+    if (rawv) { vals = JSON.parse(rawv) || {}; }
+  } catch (e) { vals = {}; }
+
+  function value(name) {
+    var v = vals[name];
+    return v && v.trim() ? v.trim() : defaults[name];
+  }
+
+  function applyVars() {
+    Object.keys(fields).forEach(function (name) {
+      var text = value(name);
+      document.querySelectorAll('[data-var="' + name + '"]').forEach(function (el) {
+        el.textContent = text;
+      });
+    });
+    document.querySelectorAll("[data-link]").forEach(function (el) {
+      el.setAttribute("href", el.dataset.link.replace("{repo}", value("repo")));
+    });
+  }
+
+  Object.keys(fields).forEach(function (name) {
+    var input = document.getElementById(fields[name]);
+    if (!input) { return; }
+    if (vals[name]) { input.value = vals[name]; }
+    input.addEventListener("input", function () {
+      vals[name] = input.value;
+      try { localStorage.setItem(VKEY, JSON.stringify(vals)); } catch (e) { /* not persisted */ }
+      applyVars();
+    });
+  });
+
+  applyVars();
+
+  /* ---------- copy buttons ---------- */
+  document.querySelectorAll(".copybtn").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      var target = document.getElementById(btn.dataset.copy);
+      if (!target) { return; }
+      var text = target.innerText;
+
+      function done(ok) {
+        btn.textContent = ok ? "Copied" : "Select manually";
+        btn.classList.toggle("copied", ok);
+        setTimeout(function () {
+          btn.textContent = "Copy";
+          btn.classList.remove("copied");
+        }, 2000);
+      }
+
+      function fallback() {
+        try {
+          var ta = document.createElement("textarea");
+          ta.value = text;
+          ta.style.position = "fixed";
+          ta.style.opacity = "0";
+          document.body.appendChild(ta);
+          ta.select();
+          var ok = document.execCommand("copy");
+          document.body.removeChild(ta);
+          done(ok);
+        } catch (e) {
+          done(false);
+        }
+      }
+
+      if (navigator.clipboard && navigator.clipboard.writeText) {
+        navigator.clipboard.writeText(text).then(function () { done(true); }, fallback);
+      } else {
+        fallback();
+      }
+    });
+  });
+
+  /* ---------- progress ---------- */
+  var KEY = "rotate-ci-key-progress-v1";
+  var steps = Array.prototype.slice.call(document.querySelectorAll("li.step"));
+
+  function load() {
+    try {
+      var raw = localStorage.getItem(KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch (e) {
+      return {};
+    }
+  }
+
+  function save(state) {
+    try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* not persisted */ }
+  }
+
+  var state = load();
+
+  function render() {
+    var done = 0;
+    steps.forEach(function (li, i) {
+      var on = !!state[li.dataset.id];
+      if (on) { done++; }
+      li.classList.toggle("done", on);
+      var head = li.querySelector(".step-head");
+      head.setAttribute("aria-pressed", on ? "true" : "false");
+      li.querySelector(".tick").textContent = on ? "✓" : String(i + 1);
+    });
+    document.getElementById("fill").style.width = (done / steps.length * 100) + "%";
+    document.getElementById("label").textContent = done + " / " + steps.length;
+  }
+
+  steps.forEach(function (li) {
+    var head = li.querySelector(".step-head");
+    function toggle() {
+      state[li.dataset.id] = !state[li.dataset.id];
+      save(state);
+      render();
+    }
+    head.addEventListener("click", toggle);
+    head.addEventListener("keydown", function (e) {
+      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+    });
+  });
+
+  render();
+}());
+</script>

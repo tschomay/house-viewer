@@ -1,0 +1,472 @@
+<!--
+  easy-mode runbook template.
+
+  Copy this file and fill it in. Everything marked REPLACE is content; the CSS
+  and JS below are the house style and the working mechanics -- leave them
+  alone unless the subject genuinely calls for something different.
+
+  Structure of a page:
+    masthead     - what this is, and how many steps
+    progress bar - sticky, persists across visits
+    vars panel   - OPTIONAL: delete entirely if nothing needs filling in
+    prelude      - OPTIONAL: prerequisites and anything that could stop the plan
+    steps        - the procedure
+    outro        - what happens afterwards
+
+  Written for publishing as an Artifact, so no doctype/html/head/body tags.
+-->
+<title>REPLACE: Short Name</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=Source+Sans+3:ital,wght@0,400;0,600;1,400&family=JetBrains+Mono:wght@400;600&display=swap">
+
+<style>
+  /* Light palette on bare :root, so the un-stamped "system" state resolves. */
+  :root {
+    --bg: #f6f8fa;
+    --surface: #ffffff;
+    --surface-2: #f0f3f6;
+    --ink: #16202b;
+    --muted: #5c6b7a;
+    --border: #dde3ea;
+    --border-strong: #c3ccd6;
+    --accent: #b45309;
+    --accent-ink: #ffffff;
+    --accent-soft: #fdf2e3;
+    --danger: #a8321f;
+    --danger-soft: #fdf0ed;
+    --ok: #15803d;
+    --shadow: 0 1px 2px rgba(22, 32, 43, .06), 0 4px 12px rgba(22, 32, 43, .05);
+    --radius: 10px;
+  }
+
+  /* Dark for OS preference, unless the viewer explicitly chose light. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0e141b;
+      --surface: #161f29;
+      --surface-2: #1d2833;
+      --ink: #e4ebf2;
+      --muted: #94a3b3;
+      --border: #26323f;
+      --border-strong: #3a4956;
+      --accent: #eda344;
+      --accent-ink: #1a1207;
+      --accent-soft: #2a1e0e;
+      --danger: #ef8577;
+      --danger-soft: #2b1713;
+      --ok: #56ce80;
+      --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 14px rgba(0, 0, 0, .3);
+    }
+  }
+
+  /* Dark again for an explicit toggle, so it wins in both directions. */
+  :root[data-theme="dark"] {
+    --bg: #0e141b;
+    --surface: #161f29;
+    --surface-2: #1d2833;
+    --ink: #e4ebf2;
+    --muted: #94a3b3;
+    --border: #26323f;
+    --border-strong: #3a4956;
+    --accent: #eda344;
+    --accent-ink: #1a1207;
+    --accent-soft: #2a1e0e;
+    --danger: #ef8577;
+    --danger-soft: #2b1713;
+    --ok: #56ce80;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .4), 0 4px 14px rgba(0, 0, 0, .3);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--ink);
+    font-family: "Source Sans 3", ui-sans-serif, system-ui, sans-serif;
+    font-size: 17px;
+    line-height: 1.6;
+    -webkit-text-size-adjust: 100%;
+  }
+
+  .wrap { max-width: 46rem; margin: 0 auto; padding: 0 1.1rem 5rem; }
+
+  /* masthead */
+  header.masthead {
+    padding: 2.6rem 0 1.6rem;
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 1.6rem;
+  }
+  .eyebrow {
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: .7rem; letter-spacing: .14em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 .7rem;
+  }
+  h1 {
+    font-family: Archivo, ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700; font-size: clamp(1.9rem, 7vw, 2.6rem);
+    line-height: 1.08; letter-spacing: -.021em;
+    text-wrap: balance; margin: 0 0 .6rem;
+  }
+  .standfirst { color: var(--muted); margin: 0; max-width: 34rem; }
+
+  /* progress */
+  .progress {
+    position: sticky; top: 0; z-index: 20;
+    background: color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    border-bottom: 1px solid var(--border);
+    margin: 0 -1.1rem 1.8rem; padding: .7rem 1.1rem;
+    display: flex; align-items: center; gap: .8rem;
+  }
+  .progress-track { flex: 1; height: 5px; border-radius: 99px; background: var(--surface-2); overflow: hidden; }
+  .progress-fill { height: 100%; width: 0%; background: var(--accent); border-radius: 99px; transition: width .3s ease; }
+  @media (prefers-reduced-motion: reduce) { .progress-fill { transition: none; } }
+  .progress-label {
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .74rem;
+    color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap;
+  }
+  .reset {
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .7rem;
+    background: none; border: 1px solid var(--border-strong); color: var(--muted);
+    border-radius: 6px; padding: .25rem .5rem; cursor: pointer;
+  }
+  .reset:hover { color: var(--ink); border-color: var(--ink); }
+  .reset:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  /* cards: prelude and vars panel share the surface treatment */
+  .panel {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 1.1rem 1.2rem;
+    margin-bottom: 1.4rem; box-shadow: var(--shadow);
+  }
+  .panel h2 {
+    font-family: Archivo, sans-serif; font-size: .78rem;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); margin: 0 0 .7rem;
+  }
+  .panel p { margin: 0 0 .7rem; }
+  .panel p:last-child { margin-bottom: 0; }
+
+  /* fill-once inputs */
+  .var-grid { display: flex; flex-direction: column; gap: .7rem; }
+  .var-grid label {
+    display: flex; flex-direction: column; gap: .25rem;
+    font-size: .82rem; color: var(--muted);
+    font-family: Archivo, sans-serif; letter-spacing: .02em;
+  }
+  .var-grid input {
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .84rem;
+    padding: .5rem .6rem; border-radius: 7px;
+    border: 1px solid var(--border-strong);
+    background: var(--surface-2); color: var(--ink);
+  }
+  .var-grid input:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .unfilled {
+    border-bottom: 1px dashed var(--danger);
+    color: var(--danger); font-style: italic;
+  }
+
+  /* steps */
+  ol.steps { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 1.1rem; }
+  li.step {
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); box-shadow: var(--shadow);
+    overflow: hidden; transition: opacity .2s ease;
+  }
+  li.step.done { opacity: .58; }
+  .step-head {
+    display: flex; align-items: flex-start; gap: .85rem;
+    padding: 1.05rem 1.15rem; cursor: pointer; user-select: none;
+  }
+  .step-head:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .tick {
+    flex: none; width: 27px; height: 27px; margin-top: .12rem;
+    border-radius: 50%; border: 2px solid var(--border-strong);
+    background: transparent; display: grid; place-items: center;
+    font-family: "JetBrains Mono", monospace; font-size: .78rem; font-weight: 600;
+    color: var(--muted); font-variant-numeric: tabular-nums;
+    transition: background .15s ease, border-color .15s ease, color .15s ease;
+  }
+  li.step.done .tick { background: var(--ok); border-color: var(--ok); color: #fff; font-size: .9rem; }
+  .step-title {
+    font-family: Archivo, sans-serif; font-weight: 600; font-size: 1.09rem;
+    letter-spacing: -.011em; line-height: 1.3; margin: 0; text-wrap: balance;
+  }
+  li.step.done .step-title { text-decoration: line-through; text-decoration-thickness: 1px; }
+  .step-where {
+    font-family: "JetBrains Mono", monospace; font-size: .69rem;
+    letter-spacing: .06em; text-transform: uppercase;
+    color: var(--accent); margin: .28rem 0 0;
+  }
+  .step-body { padding: 0 1.15rem 1.15rem; display: flex; flex-direction: column; gap: .85rem; }
+  .step-body p { margin: 0; }
+
+  /* links */
+  a { color: var(--accent); text-underline-offset: 2px; }
+  a:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 3px; }
+  .golink {
+    display: inline-flex; align-items: center; gap: .45rem; align-self: flex-start;
+    background: var(--accent); color: var(--accent-ink);
+    font-family: Archivo, sans-serif; font-weight: 600; font-size: .89rem;
+    text-decoration: none; padding: .55rem .95rem; border-radius: 7px;
+  }
+  .golink:hover { filter: brightness(1.08); }
+  .golink::after { content: "↗"; font-size: .95em; }
+
+  /* copy blocks: white-space:pre + overflow-x:auto is what keeps a long value
+     on one line, so a hand-selection cannot pick up a wrap as a newline. */
+  .copybox { position: relative; }
+  .copybox pre {
+    margin: 0; background: var(--surface-2);
+    border: 1px solid var(--border); border-radius: 8px;
+    padding: .8rem .9rem 2.6rem;
+    overflow-x: auto; overflow-y: auto; max-height: 16rem;
+    font-family: "JetBrains Mono", ui-monospace, monospace;
+    font-size: .79rem; line-height: 1.55;
+  }
+  .copybox code { white-space: pre; }
+  .copybtn {
+    position: absolute; right: .5rem; bottom: .5rem;
+    font-family: Archivo, sans-serif; font-weight: 600; font-size: .76rem;
+    background: var(--accent); color: var(--accent-ink);
+    border: none; border-radius: 6px; padding: .38rem .75rem; cursor: pointer;
+  }
+  .copybtn:hover { filter: brightness(1.08); }
+  .copybtn:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .copybtn.copied { background: var(--ok); color: #fff; }
+  code.inline {
+    font-family: "JetBrains Mono", ui-monospace, monospace; font-size: .84em;
+    background: var(--surface-2); border: 1px solid var(--border);
+    border-radius: 4px; padding: .08em .34em; word-break: break-word;
+  }
+
+  /* callouts: .note for context, .note.warn for something that bites */
+  .note {
+    border-left: 3px solid var(--accent); background: var(--accent-soft);
+    border-radius: 0 7px 7px 0; padding: .7rem .9rem; font-size: .93rem;
+  }
+  .note.warn { border-left-color: var(--danger); background: var(--danger-soft); }
+  .note strong {
+    font-family: Archivo, sans-serif; display: block; margin-bottom: .18rem;
+    font-size: .81rem; letter-spacing: .05em; text-transform: uppercase; color: var(--accent);
+  }
+  .note.warn strong { color: var(--danger); }
+
+  /* outro */
+  .outro {
+    margin-top: 2.4rem; padding-top: 1.4rem;
+    border-top: 1px solid var(--border); color: var(--muted); font-size: .9rem;
+  }
+  .outro h2 {
+    font-family: Archivo, sans-serif; font-size: .78rem; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); margin: 0 0 .6rem;
+  }
+  .outro ul { margin: 0; padding-left: 1.1rem; }
+  .outro li { margin-bottom: .4rem; }
+</style>
+
+<div class="wrap">
+
+  <header class="masthead">
+    <p class="eyebrow">REPLACE: two or three words of category</p>
+    <h1>REPLACE: what this gets done</h1>
+    <p class="standfirst">
+      REPLACE: one or two sentences. Say how many steps and what the end state is.
+    </p>
+  </header>
+
+  <div class="progress">
+    <div class="progress-track"><div class="progress-fill" id="fill"></div></div>
+    <span class="progress-label" id="label">0 / 0</span>
+    <button class="reset" id="reset" type="button">Reset</button>
+  </div>
+
+  <!-- OPTIONAL fill-once panel. DELETE THIS BLOCK if no value recurs.
+       Only worth it when the same unknown appears three or more times. -->
+  <div class="panel">
+    <h2>Fill in once</h2>
+    <p>These fill themselves into every command below.</p>
+    <div class="var-grid">
+      <label>REPLACE: field label
+        <input class="var-input" data-var="example" placeholder="e.g. 123456789012" autocapitalize="off" autocorrect="off" spellcheck="false">
+      </label>
+    </div>
+  </div>
+
+  <!-- OPTIONAL prelude. Anything that could stop the whole plan goes HERE,
+       not at step 4 where they discover it after doing three steps. -->
+  <div class="panel">
+    <h2>Before you start</h2>
+    <p>REPLACE: prerequisites, required permissions, constraints worth knowing.</p>
+  </div>
+
+  <ol class="steps" id="steps">
+
+    <!-- Repeat this block per step. data-id must be unique and stable:
+         progress is keyed on it, so reusing or reordering ids moves someone's
+         saved ticks onto the wrong rows. -->
+    <li class="step" data-id="s1">
+      <div class="step-head" role="button" tabindex="0" aria-pressed="false">
+        <span class="tick">1</span>
+        <div>
+          <p class="step-title">REPLACE: imperative, e.g. "Create the hosting site"</p>
+          <p class="step-where">REPLACE: where they do it, e.g. "Firebase Console"</p>
+        </div>
+      </div>
+      <div class="step-body">
+        <p>REPLACE: what to do, and what a correct result looks like.</p>
+
+        <a class="golink" href="REPLACE_DEEP_LINK" target="_blank" rel="noopener">REPLACE: Open …</a>
+
+        <!-- Keep <pre> at column zero: indenting it puts leading whitespace
+             inside the element, and that whitespace lands in the copy. -->
+        <div class="copybox">
+<pre><code id="s1-value">REPLACE: exact value or command</code></pre>
+          <button class="copybtn" type="button" data-copy="s1-value">Copy</button>
+        </div>
+
+        <div class="note warn">
+          <strong>REPLACE: failure signature</strong>
+          REPLACE: what they see when this goes wrong, and what it actually means.
+        </div>
+      </div>
+    </li>
+
+  </ol>
+
+  <div class="outro">
+    <h2>Afterwards</h2>
+    <ul>
+      <li>REPLACE: clean-up, follow-ups, what to do later.</li>
+    </ul>
+  </div>
+
+</div>
+
+<script>
+  (function () {
+    // Version these keys. A restructured page should not inherit stale state.
+    var KEY = "REPLACE-runbook-progress-v1";
+    var VKEY = "REPLACE-runbook-vars-v1";
+
+    var steps = Array.prototype.slice.call(document.querySelectorAll("li.step"));
+    var fill = document.getElementById("fill");
+    var label = document.getElementById("label");
+
+    // localStorage throws outright in some contexts (private windows, blocked
+    // site data, sandboxed frames) rather than returning empty, so every read
+    // and write is guarded and the page works fine without persistence.
+    function readJSON(key) {
+      try {
+        var raw = localStorage.getItem(key);
+        return raw ? JSON.parse(raw) : {};
+      } catch (e) { return {}; }
+    }
+    function writeJSON(key, value) {
+      try { localStorage.setItem(key, JSON.stringify(value)); } catch (e) {}
+    }
+
+    /* ---- progress ---- */
+    var state = readJSON(KEY);
+
+    function render() {
+      var done = 0;
+      steps.forEach(function (li, i) {
+        var on = !!state[li.dataset.id];
+        if (on) done++;
+        li.classList.toggle("done", on);
+        li.querySelector(".step-head").setAttribute("aria-pressed", on ? "true" : "false");
+        li.querySelector(".tick").textContent = on ? "✓" : String(i + 1);
+      });
+      fill.style.width = (steps.length ? done / steps.length * 100 : 0) + "%";
+      label.textContent = done + " / " + steps.length;
+    }
+
+    steps.forEach(function (li) {
+      var head = li.querySelector(".step-head");
+      function toggle() {
+        state[li.dataset.id] = !state[li.dataset.id];
+        writeJSON(KEY, state);
+        render();
+      }
+      head.addEventListener("click", toggle);
+      head.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); toggle(); }
+      });
+    });
+
+    document.getElementById("reset").addEventListener("click", function () {
+      state = {};
+      writeJSON(KEY, state);
+      render();
+    });
+
+    /* ---- fill-once variables (harmless if the panel was deleted) ---- */
+    var vars = readJSON(VKEY);
+
+    function applyVars() {
+      document.querySelectorAll("[data-var]").forEach(function (el) {
+        var key = el.dataset.var;
+        if (el.tagName === "INPUT") {
+          if (vars[key] != null && el.value !== vars[key]) el.value = vars[key];
+          return;
+        }
+        // Keep the placeholder visible until a real value exists, so a
+        // half-filled page reads as incomplete rather than quietly wrong.
+        if (el.dataset.placeholder == null) el.dataset.placeholder = el.textContent;
+        // textContent, never innerHTML: a pasted value is not markup.
+        el.textContent = vars[key] || el.dataset.placeholder;
+        el.classList.toggle("unfilled", !vars[key]);
+      });
+    }
+
+    document.querySelectorAll("input.var-input").forEach(function (input) {
+      input.addEventListener("input", function () {
+        vars[input.dataset.var] = input.value.trim();
+        writeJSON(VKEY, vars);
+        applyVars();
+      });
+    });
+
+    /* ---- copy buttons ---- */
+    document.querySelectorAll(".copybtn").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        var text = document.getElementById(btn.dataset.copy).innerText;
+
+        function done(ok) {
+          btn.textContent = ok ? "Copied" : "Select manually";
+          btn.classList.toggle("copied", ok);
+          setTimeout(function () {
+            btn.textContent = "Copy";
+            btn.classList.remove("copied");
+          }, 2000);
+        }
+
+        function fallback() {
+          try {
+            var ta = document.createElement("textarea");
+            ta.value = text;
+            ta.style.position = "fixed";
+            ta.style.opacity = "0";
+            document.body.appendChild(ta);
+            ta.select();
+            var ok = document.execCommand("copy");
+            document.body.removeChild(ta);
+            done(ok);
+          } catch (e) { done(false); }
+        }
+
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(function () { done(true); }, fallback);
+        } else {
+          fallback();
+        }
+      });
+    });
+
+    applyVars();
+    render();
+  })();
+</script>

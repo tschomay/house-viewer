@@ -1,0 +1,473 @@
+{
+  "metadata": {
+    "skill_name": "easy-mode",
+    "skill_path": "<path/to/skill>",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-08-26T10:51:00Z",
+    "evals_run": [
+      0,
+      1,
+      2
+    ],
+    "runs_per_configuration": 3
+  },
+  "runs": [
+    {
+      "eval_id": 0,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 10,
+        "failed": 0,
+        "total": 10,
+        "time_seconds": 350.0,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Deliverable is a self-contained HTML page, not only a chat reply or markdown file",
+          "passed": true,
+          "evidence": "roastlog-webhook-runbook.html (30423 bytes)"
+        },
+        {
+          "text": "Every command and pasteable value sits in a copy-to-clipboard block with a button",
+          "passed": true,
+          "evidence": "11 copy buttons, 11 targets, orphans=none"
+        },
+        {
+          "text": "Copy blocks use white-space:pre so long values cannot soft-wrap into the copied text",
+          "passed": true,
+          "evidence": "white-space:pre present"
+        },
+        {
+          "text": "Links target specific console pages rather than product homepages",
+          "passed": true,
+          "evidence": "3/3 links are deep paths"
+        },
+        {
+          "text": "Checklist progress persists to localStorage inside try/catch",
+          "passed": true,
+          "evidence": "localStorage wrapped in try/catch"
+        },
+        {
+          "text": "At least one warning is placed inside the step where it fires, not only in a preamble",
+          "passed": true,
+          "evidence": "8/8 steps contain an inline callout"
+        },
+        {
+          "text": "Names at least one concrete failure signature (symptom to cause)",
+          "passed": true,
+          "evidence": "signals: ['if you see', 'means', 'reads like', 'looks like']"
+        },
+        {
+          "text": "Multi-command shell sequences are wrapped as a single paste (heredoc or one block)",
+          "passed": true,
+          "evidence": "heredoc single-paste block present"
+        },
+        {
+          "text": "States whether re-running a step is safe, or makes scripts idempotent",
+          "passed": true,
+          "evidence": "signals: ['safe to re-run']"
+        },
+        {
+          "text": "Prerequisites that could block the whole procedure are front-loaded before step 1 work",
+          "passed": true,
+          "evidence": "pre-step signals: ['before you start', 'you need', 'first']"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 10,
+        "failed": 0,
+        "total": 10,
+        "time_seconds": 339.6,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Deliverable is a self-contained HTML page, not only a chat reply or markdown file",
+          "passed": true,
+          "evidence": "roastlog-dns-cutover.html (28774 bytes)"
+        },
+        {
+          "text": "Every command and pasteable value sits in a copy-to-clipboard block with a button",
+          "passed": true,
+          "evidence": "9 copy buttons, 9 targets, orphans=none"
+        },
+        {
+          "text": "Copy blocks use white-space:pre so long values cannot soft-wrap into the copied text",
+          "passed": true,
+          "evidence": "white-space:pre present"
+        },
+        {
+          "text": "Links target specific console pages rather than product homepages",
+          "passed": true,
+          "evidence": "5/5 links are deep paths"
+        },
+        {
+          "text": "Checklist progress persists to localStorage inside try/catch",
+          "passed": true,
+          "evidence": "localStorage wrapped in try/catch"
+        },
+        {
+          "text": "At least one warning is placed inside the step where it fires, not only in a preamble",
+          "passed": true,
+          "evidence": "6/8 steps contain an inline callout"
+        },
+        {
+          "text": "Names at least one concrete failure signature (symptom to cause)",
+          "passed": true,
+          "evidence": "signals: ['symptom', 'means']"
+        },
+        {
+          "text": "Multi-command shell sequences are wrapped as a single paste (heredoc or one block)",
+          "passed": true,
+          "evidence": "heredoc single-paste block present"
+        },
+        {
+          "text": "States whether re-running a step is safe, or makes scripts idempotent",
+          "passed": true,
+          "evidence": "signals: ['safe to run again', 'as many times']"
+        },
+        {
+          "text": "Prerequisites that could block the whole procedure are front-loaded before step 1 work",
+          "passed": true,
+          "evidence": "pre-step signals: ['before you start', 'prerequisite', 'first']"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 10,
+        "failed": 0,
+        "total": 10,
+        "time_seconds": 514.7,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Deliverable is a self-contained HTML page, not only a chat reply or markdown file",
+          "passed": true,
+          "evidence": "rotate-ci-key.html (45368 bytes)"
+        },
+        {
+          "text": "Every command and pasteable value sits in a copy-to-clipboard block with a button",
+          "passed": true,
+          "evidence": "15 copy buttons, 15 targets, orphans=none"
+        },
+        {
+          "text": "Copy blocks use white-space:pre so long values cannot soft-wrap into the copied text",
+          "passed": true,
+          "evidence": "white-space:pre present"
+        },
+        {
+          "text": "Links target specific console pages rather than product homepages",
+          "passed": true,
+          "evidence": "8/8 links are deep paths"
+        },
+        {
+          "text": "Checklist progress persists to localStorage inside try/catch",
+          "passed": true,
+          "evidence": "localStorage wrapped in try/catch"
+        },
+        {
+          "text": "At least one warning is placed inside the step where it fires, not only in a preamble",
+          "passed": true,
+          "evidence": "8/8 steps contain an inline callout"
+        },
+        {
+          "text": "Names at least one concrete failure signature (symptom to cause)",
+          "passed": true,
+          "evidence": "signals: ['if you see', 'means', 'looks like']"
+        },
+        {
+          "text": "Multi-command shell sequences are wrapped as a single paste (heredoc or one block)",
+          "passed": true,
+          "evidence": "heredoc single-paste block present"
+        },
+        {
+          "text": "States whether re-running a step is safe, or makes scripts idempotent",
+          "passed": true,
+          "evidence": "signals: ['idempotent', 'safe to re-run', 're-running', 'as many times']"
+        },
+        {
+          "text": "Prerequisites that could block the whole procedure are front-loaded before step 1 work",
+          "passed": true,
+          "evidence": "pre-step signals: ['before you start', 'you need', 'first']"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 0,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.1,
+        "passed": 1,
+        "failed": 9,
+        "total": 10,
+        "time_seconds": 48.5,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Deliverable is a self-contained HTML page, not only a chat reply or markdown file",
+          "passed": false,
+          "evidence": "no HTML file produced; got ['chat_reply.md']"
+        },
+        {
+          "text": "Every command and pasteable value sits in a copy-to-clipboard block with a button",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "Copy blocks use white-space:pre so long values cannot soft-wrap into the copied text",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "Links target specific console pages rather than product homepages",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "Checklist progress persists to localStorage inside try/catch",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "At least one warning is placed inside the step where it fires, not only in a preamble",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "Names at least one concrete failure signature (symptom to cause)",
+          "passed": false,
+          "evidence": "signals: []"
+        },
+        {
+          "text": "Multi-command shell sequences are wrapped as a single paste (heredoc or one block)",
+          "passed": false,
+          "evidence": "no heredoc-wrapped block"
+        },
+        {
+          "text": "States whether re-running a step is safe, or makes scripts idempotent",
+          "passed": true,
+          "evidence": "signals: ['idempotent']"
+        },
+        {
+          "text": "Prerequisites that could block the whole procedure are front-loaded before step 1 work",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.0,
+        "passed": 0,
+        "failed": 10,
+        "total": 10,
+        "time_seconds": 138.1,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Deliverable is a self-contained HTML page, not only a chat reply or markdown file",
+          "passed": false,
+          "evidence": "no HTML file produced; got ['chat_reply.md', 'roastlog-coffee-dns-setup.md']"
+        },
+        {
+          "text": "Every command and pasteable value sits in a copy-to-clipboard block with a button",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "Copy blocks use white-space:pre so long values cannot soft-wrap into the copied text",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "Links target specific console pages rather than product homepages",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "Checklist progress persists to localStorage inside try/catch",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "At least one warning is placed inside the step where it fires, not only in a preamble",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "Names at least one concrete failure signature (symptom to cause)",
+          "passed": false,
+          "evidence": "signals: ['symptom']"
+        },
+        {
+          "text": "Multi-command shell sequences are wrapped as a single paste (heredoc or one block)",
+          "passed": false,
+          "evidence": "no heredoc-wrapped block"
+        },
+        {
+          "text": "States whether re-running a step is safe, or makes scripts idempotent",
+          "passed": false,
+          "evidence": "signals: none"
+        },
+        {
+          "text": "Prerequisites that could block the whole procedure are front-loaded before step 1 work",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.1,
+        "passed": 1,
+        "failed": 9,
+        "total": 10,
+        "time_seconds": 152.3,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Deliverable is a self-contained HTML page, not only a chat reply or markdown file",
+          "passed": false,
+          "evidence": "no HTML file produced; got ['aws-key-rotation-runbook.md', 'chat_reply.md']"
+        },
+        {
+          "text": "Every command and pasteable value sits in a copy-to-clipboard block with a button",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "Copy blocks use white-space:pre so long values cannot soft-wrap into the copied text",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "Links target specific console pages rather than product homepages",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "Checklist progress persists to localStorage inside try/catch",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "At least one warning is placed inside the step where it fires, not only in a preamble",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        },
+        {
+          "text": "Names at least one concrete failure signature (symptom to cause)",
+          "passed": true,
+          "evidence": "signals: ['symptom', 'means']"
+        },
+        {
+          "text": "Multi-command shell sequences are wrapped as a single paste (heredoc or one block)",
+          "passed": false,
+          "evidence": "no heredoc-wrapped block"
+        },
+        {
+          "text": "States whether re-running a step is safe, or makes scripts idempotent",
+          "passed": false,
+          "evidence": "signals: none"
+        },
+        {
+          "text": "Prerequisites that could block the whole procedure are front-loaded before step 1 work",
+          "passed": false,
+          "evidence": "no HTML deliverable"
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 401.4333,
+        "stddev": 98.2295,
+        "min": 339.6,
+        "max": 514.7
+      },
+      "tokens": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 0.0667,
+        "stddev": 0.0577,
+        "min": 0.0,
+        "max": 0.1
+      },
+      "time_seconds": {
+        "mean": 112.9667,
+        "stddev": 56.2794,
+        "min": 48.5,
+        "max": 152.3
+      },
+      "tokens": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.93",
+      "time_seconds": "+288.5",
+      "tokens": "+0"
+    }
+  },
+  "notes": []
+}

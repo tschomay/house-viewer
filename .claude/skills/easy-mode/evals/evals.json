@@ -1,0 +1,62 @@
+{
+  "skill_name": "easy-mode",
+  "evals": [
+    {
+      "id": 0,
+      "name": "stripe-webhook-setup",
+      "prompt": "i need to set up stripe webhooks for my side project. the endpoint is already deployed at api.roastlog.dev/webhooks/stripe and it handles checkout.session.completed and invoice.payment_failed. i've never done the stripe dashboard side of this though. can you give me the steps? i'm on my phone right now so anything that makes it easier would help",
+      "expected_output": "A published tap-to-copy checklist artifact with deep links into the Stripe dashboard, the signing secret handled as a value that must be pasted cleanly, and failure signatures named.",
+      "files": [],
+      "assertions": [
+        "Deliverable is a self-contained HTML page, not only a chat reply or markdown file",
+        "Every command and pasteable value sits in a copy-to-clipboard block with a button",
+        "Copy blocks use white-space:pre so long values cannot soft-wrap into the copied text",
+        "Links target specific console pages rather than product homepages",
+        "Checklist progress persists to localStorage inside try/catch",
+        "At least one warning is placed inside the step where it fires, not only in a preamble",
+        "Names at least one concrete failure signature (symptom to cause)",
+        "Multi-command shell sequences are wrapped as a single paste (heredoc or one block)",
+        "States whether re-running a step is safe, or makes scripts idempotent",
+        "Prerequisites that could block the whole procedure are front-loaded before step 1 work"
+      ]
+    },
+    {
+      "id": 1,
+      "name": "namecheap-dns-to-vercel",
+      "prompt": "walk me through pointing my namecheap domain at my vercel deployment. domain is roastlog.coffee, the vercel project is roastlog-web. i want the apex and www both working",
+      "expected_output": "A runbook covering DNS records with exact values in copy blocks, propagation caveats, and what a correct result looks like.",
+      "files": [],
+      "assertions": [
+        "Deliverable is a self-contained HTML page, not only a chat reply or markdown file",
+        "Every command and pasteable value sits in a copy-to-clipboard block with a button",
+        "Copy blocks use white-space:pre so long values cannot soft-wrap into the copied text",
+        "Links target specific console pages rather than product homepages",
+        "Checklist progress persists to localStorage inside try/catch",
+        "At least one warning is placed inside the step where it fires, not only in a preamble",
+        "Names at least one concrete failure signature (symptom to cause)",
+        "Multi-command shell sequences are wrapped as a single paste (heredoc or one block)",
+        "States whether re-running a step is safe, or makes scripts idempotent",
+        "Prerequisites that could block the whole procedure are front-loaded before step 1 work"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "rotate-aws-ci-keys",
+      "prompt": "I need to rotate the AWS access keys for our CI user - it's an IAM user called github-actions-deployer and the key is stored as AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY in our repo secrets. what do I need to do to rotate without breaking the running pipeline?",
+      "expected_output": "An ordered runbook where sequencing matters (create new key before deleting old), with the overlap window explained and rollback named.",
+      "files": [],
+      "assertions": [
+        "Deliverable is a self-contained HTML page, not only a chat reply or markdown file",
+        "Every command and pasteable value sits in a copy-to-clipboard block with a button",
+        "Copy blocks use white-space:pre so long values cannot soft-wrap into the copied text",
+        "Links target specific console pages rather than product homepages",
+        "Checklist progress persists to localStorage inside try/catch",
+        "At least one warning is placed inside the step where it fires, not only in a preamble",
+        "Names at least one concrete failure signature (symptom to cause)",
+        "Multi-command shell sequences are wrapped as a single paste (heredoc or one block)",
+        "States whether re-running a step is safe, or makes scripts idempotent",
+        "Prerequisites that could block the whole procedure are front-loaded before step 1 work"
+      ]
+    }
+  ]
+}
