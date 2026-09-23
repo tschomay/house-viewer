@@ -7,6 +7,8 @@ const src = join(process.cwd(), "node_modules/onnxruntime-web/dist");
 const dest = join(process.cwd(), "public/ort");
 mkdirSync(dest, { recursive: true });
 for (const f of readdirSync(src)) {
-  if (/^ort-wasm-simd-threaded(\.jsep)?\.(wasm|mjs)$/.test(f)) cpSync(join(src, f), join(dest, f));
+  // Every variant: onnxruntime picks one at runtime (plain, asyncify, jsep/WebGPU, jspi)
+  // depending on the device, and a missing file makes model loading hang silently.
+  if (/^ort-wasm-simd-threaded(\.\w+)?\.(wasm|mjs)$/.test(f)) cpSync(join(src, f), join(dest, f));
 }
 console.log("copied onnxruntime-web wasm → public/ort");
