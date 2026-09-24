@@ -56,6 +56,8 @@ export interface RoomColors {
 
 const EYE_SEP = 0.064;
 const MAX_PHOTOS = 6;
+/** How far from a photo's viewpoint (m) its depth mesh stays up. Farther off, its stretched edges and holes show. */
+const DEPTH_MESH_RANGE = 0.6;
 const HFOV = 80; // a little wider than the photos, for a sense of space
 
 /**
@@ -167,8 +169,10 @@ export default function HouseFlythrough(props: Props) {
     // Depth meshes: near a photo's viewpoint, its own depth mesh takes over from the flat
     // projection. From the viewpoint both show the same pixels; stepping or looking around
     // (and in stereo) the furniture then has real depth instead of being painted on the walls.
+    // At most one is shown, opaque, and it switches rather than fades: two meshes of nearby
+    // photos (or a dithered fade) overlap into a speckled, torn-looking mess.
     const shotById = new Map(model.rooms.flatMap((r) => r.photos.map((p) => [p.photoId, { p, floor: r.floor }] as const)));
-    const depthMeshes: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; x: number; z: number; yaw: number }[] = [];
+    const depthMeshes: { mesh: THREE.Mesh; x: number; z: number; yaw: number }[] = [];
     for (const l of depthLayers) {
       const shot = shotById.get(l.photoId);
       if (!shot || !photos.has(l.photoId)) continue;
@@ -176,27 +180,34 @@ export default function HouseFlythrough(props: Props) {
       geo.setAttribute("position", new THREE.BufferAttribute(l.positions, 3));
       geo.setAttribute("uv", new THREE.BufferAttribute(l.uvs, 2));
       geo.setIndex(new THREE.BufferAttribute(l.indices, 1));
-      // Dithered transparency: no sorting trouble while it fades in and out.
-      const mat = new THREE.MeshBasicMaterial({ map: photoTexture(l.photoId), side: THREE.DoubleSide, alphaHash: true, opacity: 0 });
+      const mat = new THREE.MeshBasicMaterial({ map: photoTexture(l.photoId), side: THREE.DoubleSide });
       const mesh = new THREE.Mesh(geo, mat);
       mesh.position.set(shot.p.x, shot.p.y, shot.p.z);
       mesh.rotation.y = shot.p.yaw;
       mesh.visible = false;
       floorGroups[shot.floor].add(mesh);
-      depthMeshes.push({ mesh, mat, x: shot.p.x, z: shot.p.z, yaw: shot.p.yaw });
+      depthMeshes.push({ mesh, x: shot.p.x, z: shot.p.z, yaw: shot.p.yaw });
       disposables.push(geo, mat);
     }
     const fwd = new THREE.Vector3();
-    const fadeDepth = (cam: THREE.Vector3) => {
+    let shownDepth: (typeof depthMeshes)[number] | null = null;
+    const pickDepth = (cam: THREE.Vector3) => {
       camera.getWorldDirection(fwd);
       const camYaw = Math.atan2(-fwd.x, -fwd.z);
+      // Closest viewpoint you're standing at and roughly facing along; a small bonus for the
+      // one already shown, so two photos taken side by side don't flicker back and forth.
+      let best: typeof shownDepth = null, bestScore = Infinity;
       for (const d of depthMeshes) {
         const dist = Math.hypot(cam.x - d.x, cam.z - d.z);
         const turn = Math.abs(Math.atan2(Math.sin(camYaw - d.yaw), Math.cos(camYaw - d.yaw)));
-        const a = (1 - THREE.MathUtils.smoothstep(dist, 0.35, 1.5)) * (1 - THREE.MathUtils.smoothstep(turn, 0.9, 1.6));
-        d.mat.opacity = a;
-        d.mesh.visible = a > 0.02;
+        if (dist > DEPTH_MESH_RANGE || turn > 0.8) continue;
+        const score = dist + 0.3 * turn - (d === shownDepth ? 0.1 : 0);
+        if (score < bestScore) [best, bestScore] = [d, score];
       }
+      if (best === shownDepth) return;
+      if (shownDepth) shownDepth.mesh.visible = false;
+      if (best) best.mesh.visible = true;
+      shownDepth = best;
     };
 
     // Camera rig: the path moves the rig; look-around (drag / tilt / headset) turns the camera inside it.
@@ -345,7 +356,7 @@ export default function HouseFlythrough(props: Props) {
       camera.updateMatrixWorld(true);
       camera.getWorldPosition(camWorld);
       for (const u of updaters) u(camWorld);
-      fadeDepth(camWorld);
+      pickDepth(camWorld);
 
       if (performance.now() - lastReport > 120) {
         lastReport = performance.now();

@@ -1,6 +1,6 @@
 # Project status & handoff
 
-_Last updated: 2026-09-24 (3D fly-through added). Read this first if you're picking up the project in a new session._
+_Last updated: 2026-09-24 (tour snaps between static shots; image corruption fix). Read this first if you're picking up the project in a new session._
 
 The original brief (goals, pipeline, build order, open questions) is summarized in [README.md](../README.md). This file covers **where things stand**, **what's been verified**, and **what to do next**.
 
@@ -20,7 +20,7 @@ The original brief (goals, pipeline, build order, open questions) is summarized 
 | 8. Gyro parallax | ✅ built, ⚠️ **not tried on a real phone** | desktop mouse-parallax path exercised; iOS permission flow is code-only |
 | Access gate (added on request) | ✅ done | curl: locked by default, bogus Gemini key rejected |
 | Manual camera editor | ✅ done (2026-09-24) | **Set camera** on a photo card: tap the plan + aim slider. Checked in the browser (pose saved with `manualPose`). The placement pass keeps hand-set cameras and gives them to Gemini as fixed references |
-| Seam feathering | ✅ done (2026-09-24) | side edges of the current photo fade into neighbours as you turn; off at rest. Checked with screenshots |
+| Seam feathering | ⛔ removed (2026-09-24) | replaced by snapping between static shots; see "Tour: static shots" below |
 | 3D fly-through (optional, `/flythrough`) | ✅ **built 2026-09-24, checked on the demo and the real Avon house** | See "3D fly-through" below. Headless screenshots along the whole route, mono and cross-eye, with and without AI walls and depth meshes; no page errors. Not yet tried on a real phone or a VR headset |
 | Gemini cost tracker | ✅ done | each Gemini button shows its last run's estimated cost and tokens, plus this device's running total (localStorage, with reset). Cached re-runs show as free. Rates in `lib/cost.ts` were checked against ai.google.dev pricing on 2026-09-24 |
 
@@ -49,7 +49,17 @@ It imports, adds depth in ~3 s, tours the multi-photo rooms, and saves screensho
 
   The acceptance thresholds did their job: no photo was moved to a wrong pose.
 - **Looking around a merged room smears badly on real photos:** neighbouring photos' depth meshes, seen from a few metres off their own viewpoint with imperfect poses, stretch into streaks. At rest each photo looks fine.
-- Proposal, not built yet (waiting on the user): in merged rooms, turning past the current photo's edge **steps to the neighbouring photo** that faces that way, instead of rendering smeared neighbours. Each photo is then only ever seen from its own viewpoint, and poses only need to be right to within ~30° (which Gemini's placements are).
+- ~~Proposal~~ built 2026-09-24, see "Tour: static shots" below.
+
+## Tour: static shots, and the image corruption fix (user report, 2026-09-24)
+
+**Report:** images sometimes looked corrupted when moving around or changing viewpoints: black torn patches along the stair balusters and the door edge (Foyer, Viewpoint 3/3, cross-eye), and similar in the fly-through.
+
+- **Tour cause:** each photo's mesh drops triangles across depth edges, and the holes relied on things drawn behind them (a dimmed backdrop plus the room's other photos). On the user's phone they showed the black clear colour. Fine structure like balusters or a storm door is almost all edges, so the holes are large there. Separately, in the headless run one kitchen viewpoint showed only the dim backdrop, with its mesh missing.
+- **Tour fix, as agreed with the user:** the tour now shows **static shots**. Only the current photo is drawn, from its own viewpoint, as a mesh that keeps every triangle, so there is nothing to see through. Frustum culling is off for it. **Swipe sideways** (more than 18% of the view's width) or tap **Viewpoint n/N ›** to snap to the next photo, clockwise by Gemini heading (unplaced photos last). A short drag still looks around a little. Merging, feathering, the backdrop and the "merge photos" checkbox are gone from the tour. The 3D fly-through is now the continuous view.
+- **Fly-through cause:** near a viewpoint, every depth mesh within 1.5 m faded in with dithered transparency (`alphaHash`). Where photos were taken close together (the kitchen), two or three overlapped into speckle.
+- **Fly-through fix:** at most one depth mesh is shown: the nearest viewpoint within 0.6 m that you're roughly facing, opaque, and switched on and off rather than faded. There's a little hysteresis, so side-by-side photos don't flicker.
+- **Verified** on the Avon fixture in headless Chromium: every Foyer/Kitchen/Family viewpoint in cross-eye mode, swipe left ×5 (wraps 1→5→1) and right, a short drag not switching, maximum mouse parallax, and fly-through shots through the Foyer→Kitchen stretch (the kitchen speckle is gone). **Not yet checked on the user's phone**, where the black showed; the headless GPU never showed black.
 
 ## More tour/map controls (user requests, 2026-09-24)
 
@@ -62,7 +72,7 @@ It imports, adds depth in ~3 s, tours the multi-photo rooms, and saves screensho
 An optional add-on: the whole house as a 3D model, with a guided flight through it. Open **3D** in the top bar (also linked from Analyze and Tour). Needs the room map and placed cameras; depth and AI walls are extras.
 
 - **Model** (`lib/house-model.ts`): storeys found by clustering plan boxes, stacked and aligned by their stairs. Rooms become boxes from the plan, with doorways cut between connected rooms and a front door on the entry. On Avon: 2 floors, 20 rooms, the stairs detected inside the foyer, and the front door on the foyer's street side, all correct.
-- **Painting**: each room's placed photos are projected back from their cameras. Near a viewpoint, the photo's depth mesh (if depth was run) fades in for real parallax. Unseen walls show AI wall art, or colours sampled from the photos without it.
+- **Painting**: each room's placed photos are projected back from their cameras. At a viewpoint, the photo's depth mesh (if depth was run) is shown for real parallax, one at a time. Unseen walls show AI wall art, or colours sampled from the photos without it.
 - **Route**: aerial approach → front door → every room, pausing ~2.5 s at each photo's viewpoint facing its way → upstairs → rise out to an overview. Avon: 17 rooms, **4:21 at 1×**. Controls: play/pause (or tap the view), speed 0.25–3×, scrubber with a mark per room, room chips to jump. Drag, **Tilt** (device orientation) or a WebXR headset (**VR** button, shown only when supported) to look around while it plays. **⟲ Ahead** re-centres. Stereo layouts are shared with the tour.
 - **AI wall fill**: one Gemini 3.1 Flash Image call per room (4 wall elevations in one image). **Avon: 14 rooms for $0.975** (two runs, $0.975 and $0.974; the estimate said $0.98). ~7–13 s a call, 3 in parallel. Optional "imagine rooms with no photos" (labelled in the viewer) and "careful (Pro)" (~2×). So a full Avon run is ≈ $2 (existing pipeline) + ≈ $1 (walls).
 - **Verified**: `npm test` (14 new tests: storeys, stairs, doorways, front door, texture orientation, tour order, stops facing each photo's way, the route never leaves the rooms, prompt/validation); `scripts/e2e-flythrough.mjs` on the demo and on the Avon fixture (with `DEPTH=` the fixture's depth maps and `WALLS=1`), screenshots checked by eye.

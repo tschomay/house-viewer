@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
-import { DEFAULT_INTRINSICS } from "@/lib/geometry";
+import { DEFAULT_INTRINSICS, gridIndices } from "@/lib/geometry";
 import type { RoomModel } from "@/lib/client/room-model";
 
 export type StereoLayout = "cross" | "parallel" | "wiggle" | "mono";
@@ -31,6 +31,8 @@ interface Props {
   onNavigate?: (roomId: string) => void;
   /** A tap (not a drag) that didn't hit an arrow. */
   onTap?: () => void;
+  /** A long sideways drag: +1 = turn right (clockwise), −1 = turn left. The page picks the next viewpoint. */
+  onSwipe?: (dir: 1 | -1) => void;
   activeLayer: number;
   gyro: boolean;
   /** Set when navigating away: dolly the camera forward ("walking" out). */
@@ -40,13 +42,18 @@ interface Props {
 
 const EYE_SEP = 0.064;
 const MAX_PARALLAX = 0.12; // metres of simulated head movement at full tilt
+const YAW_LIMIT = 0.18; // how far a drag turns the view before it lets go (radians)
+const SWIPE = 0.18; // share of the view's width a drag must cover to step to the next viewpoint
 
 /**
- * Renders a room reconstruction as a stereo pair. Each photo is a depth-displaced
- * mesh (a GPU form of depth-image-based rendering): the second eye sees it from
- * a few centimetres to the side, so near things shift more than far ones.
- * Triangles across depth edges are dropped (see gridIndices); a flat copy of
- * the photo far behind fills the resulting holes.
+ * Renders one photo at a time as a stereo pair: a static shot, seen only from
+ * where it was taken. The photo is a depth-displaced mesh (a GPU form of
+ * depth-image-based rendering): the second eye sees it from a few centimetres
+ * to the side, so near things shift more than far ones. The mesh keeps every
+ * triangle, so depth edges stretch a little instead of tearing open; there are
+ * no holes for anything else to show through. A long sideways drag steps to
+ * the next viewpoint (snap, no blend): other photos are never drawn from
+ * someone else's viewpoint, where imperfect poses and depth smear them.
  */
 export default function StereoViewer({
   model,
@@ -57,6 +64,7 @@ export default function StereoViewer({
   showNav,
   onNavigate,
   onTap,
+  onSwipe,
   activeLayer,
   gyro,
   exiting,
@@ -64,9 +72,9 @@ export default function StereoViewer({
 }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const guideRef = useRef<HTMLDivElement>(null);
-  const live = useRef({ layout, strength, pairWidth, activeLayer, gyro, exiting: !!exiting, nav, showNav, onNavigate, onTap });
+  const live = useRef({ layout, strength, pairWidth, activeLayer, gyro, exiting: !!exiting, nav, showNav, onNavigate, onTap, onSwipe });
   useEffect(() => {
-    live.current = { layout, strength, pairWidth, activeLayer, gyro, exiting: !!exiting, nav, showNav, onNavigate, onTap };
+    live.current = { layout, strength, pairWidth, activeLayer, gyro, exiting: !!exiting, nav, showNav, onNavigate, onTap, onSwipe };
   });
 
   useEffect(() => {
@@ -84,68 +92,27 @@ export default function StereoViewer({
     const disposables: { dispose(): void }[] = [];
     const loader = new THREE.TextureLoader();
 
-    // Seam feathering (merged rooms): when you turn towards a neighbouring
-    // photo, the active photo's left/right edges fade over its last few percent
-    // so the two blend instead of cutting hard. At rest the photo fills the
-    // view exactly, so there the fade is off (it would only vignette the photo).
-    // Strength is set per frame by squeezing the ramp's texture coordinates.
-    const FEATHER_EDGE = 0.08;
-    const feather = (() => {
-      const n = 256;
-      const c = document.createElement("canvas");
-      c.width = n;
-      c.height = 1;
-      const g = c.getContext("2d")!;
-      const img = g.createImageData(n, 1);
-      for (let x = 0; x < n; x++) {
-        const u = (x + 0.5) / n;
-        const t = Math.min(1, Math.min(u, 1 - u) / FEATHER_EDGE);
-        img.data[x * 4] = img.data[x * 4 + 1] = img.data[x * 4 + 2] = 255 * t * t * (3 - 2 * t);
-        img.data[x * 4 + 3] = 255;
-      }
-      g.putImageData(img, 0, 0);
-      const t = new THREE.CanvasTexture(c);
-      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
-      disposables.push(t);
-      return t;
-    })();
-    const setFeather = (k: number) => {
-      // k = 0: sample only the flat middle (no fade); k = 1: the full ramp.
-      const span = 1 - 2 * FEATHER_EDGE * (1 - k);
-      feather.repeat.x = span;
-      feather.offset.x = (1 - span) / 2;
-    };
-
-    const groups = model.layers.map((layer) => {
+    // Every photo's mesh up front, so a snap never shows one whose texture is still loading (black).
+    const meshes = model.layers.map((layer) => {
       const tex = loader.load(layer.photo.dataUrl);
       tex.colorSpace = THREE.SRGBColorSpace;
       tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
       const geo = new THREE.BufferGeometry();
       geo.setAttribute("position", new THREE.BufferAttribute(layer.positions, 3));
       geo.setAttribute("uv", new THREE.BufferAttribute(layer.uvs, 2));
-      geo.setIndex(new THREE.BufferAttribute(layer.indices, 1));
+      // Every triangle, depth edges included (the layer's own indices drop those; see gridIndices).
+      geo.setIndex(new THREE.BufferAttribute(gridIndices(layer.positions, layer.cols, layer.rows, Infinity), 1));
       const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
-      const featherMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, alphaMap: feather, transparent: true });
       const mesh = new THREE.Mesh(geo, mat);
-
-      // Backdrop: the photo on a plane just past the far wall, dimmed, to fill disocclusion holes.
-      const far = layer.far * 1.1;
-      const hfov = (DEFAULT_INTRINSICS.hfovDeg * Math.PI) / 180;
-      const bw = 2 * far * Math.tan(hfov / 2) * 1.02;
-      const bh = (bw * layer.photo.height) / layer.photo.width;
-      const backMat = new THREE.MeshBasicMaterial({ map: tex, color: "#9a9a9a", depthWrite: false });
-      const back = new THREE.Mesh(new THREE.PlaneGeometry(bw, bh), backMat);
-      back.position.z = -far;
-      back.renderOrder = -1;
-
+      mesh.frustumCulled = false;
       const g = new THREE.Group();
-      g.add(back, mesh);
+      g.add(mesh);
       g.rotation.y = layer.pose.yaw;
       g.position.set(layer.pose.tx, 0, layer.pose.tz);
       g.scale.setScalar(layer.pose.scale);
       scene.add(g);
-      disposables.push(tex, geo, mat, featherMat, backMat, back.geometry);
-      return { g, back, mesh, mat, featherMat };
+      disposables.push(tex, geo, mat);
+      return mesh;
     });
 
     const photo = model.layers[0]?.photo;
@@ -160,7 +127,7 @@ export default function StereoViewer({
     // Navigation arrows: Street View-style chevrons on the floor a couple of
     // metres ahead, pointing towards each neighbouring room. They live in the
     // scene, so each eye sees them from its own position and they appear in
-    // depth; a third render pass draws them over the photos. Rooms off to the
+    // depth; a second render pass draws them over the photo. Rooms off to the
     // side or behind are pinned to the edge of the view, still pointing their
     // true way.
     const navGroup = new THREE.Group();
@@ -251,8 +218,7 @@ export default function StereoViewer({
     const target = { yaw: 0, pitch: 0, tx: 0, ty: 0 };
     let dolly = 0;
     let dragging: { x: number; y: number; yaw: number; pitch: number } | null = null;
-    const merged = model.mode === "merged";
-    const yawLimit = merged ? Math.PI : 0.18;
+    let shownLayer = -1;
     const clamp = (v: number, l: number) => Math.max(-l, Math.min(l, v));
 
     let tapStart: { x: number; y: number; t: number } | null = null;
@@ -265,7 +231,7 @@ export default function StereoViewer({
     const onMove = (e: PointerEvent) => {
       const w = host.clientWidth || 1;
       if (dragging) {
-        target.yaw = clamp(dragging.yaw + ((e.clientX - dragging.x) / w) * (merged ? 3 : 0.6), yawLimit);
+        target.yaw = clamp(dragging.yaw + ((e.clientX - dragging.x) / w) * 0.6, YAW_LIMIT);
         target.pitch = clamp(dragging.pitch + ((e.clientY - dragging.y) / w) * 0.6, 0.25);
       } else if (e.pointerType === "mouse" && !live.current.gyro) {
         // Desktop stand-in for head movement: hover position → small parallax.
@@ -276,9 +242,16 @@ export default function StereoViewer({
     };
     const onUp = (e: PointerEvent) => {
       e.stopPropagation();
+      const d = dragging;
       dragging = null;
       const s = tapStart;
       tapStart = null;
+      // A long sideways drag steps to the next viewpoint. Dragging left turns right, as when looking around.
+      const dx = e.clientX - (d?.x ?? e.clientX), dy = e.clientY - (d?.y ?? e.clientY);
+      if (e.type === "pointerup" && live.current.onSwipe && model.layers.length > 1 && Math.abs(dx) > (host.clientWidth || 1) * SWIPE && Math.abs(dx) > 2 * Math.abs(dy)) {
+        live.current.onSwipe(dx < 0 ? 1 : -1);
+        return;
+      }
       if (e.type !== "pointerup" || !s || Math.hypot(e.clientX - s.x, e.clientY - s.y) > 10 || performance.now() - s.t > 500) return;
       // A tap: did it land on a floor arrow, in either eye's image?
       if (live.current.showNav) {
@@ -320,7 +293,6 @@ export default function StereoViewer({
       const dy = clamp((y - baseline.beta) / 20, 1);
       target.tx = dx * MAX_PARALLAX;
       target.ty = -dy * MAX_PARALLAX * 0.6;
-      if (merged) target.yaw = clamp(target.yaw, yawLimit);
     };
     window.addEventListener("deviceorientation", onOrient);
 
@@ -357,17 +329,13 @@ export default function StereoViewer({
       const idx = Math.min(activeLayer, model.layers.length - 1);
       const layer = model.layers[idx];
       if (!layer) return;
-      // Pass 0: backdrop + the room's other photos. Pass 1: the active photo, drawn over
-      // pass 0 so a slightly misplaced neighbour can never cover the current view; the
-      // others only show through its holes and when you look beyond its edges.
-      groups.forEach(({ g, back, mesh, mat, featherMat }, i) => {
-        g.visible = merged ? model.layers[i].registered || i === idx : i === idx;
-        back.visible = i === idx;
-        mesh.layers.set(i === idx ? 1 : 0);
-        // Feather only where there are neighbours to blend into.
-        mesh.material = merged && i === idx ? featherMat : mat;
-      });
-      if (merged) setFeather(Math.min(1, Math.abs(look.yaw) / 0.15));
+      if (idx !== shownLayer) {
+        // Snap: the new photo opens straight ahead, as it was taken.
+        shownLayer = idx;
+        look.yaw = look.pitch = target.yaw = target.pitch = 0;
+        dragging = null;
+      }
+      meshes.forEach((m, i) => (m.parent!.visible = i === idx));
 
       // Camera sits where the active photo was taken, looking the same way.
       const p = layer.pose;
@@ -428,9 +396,6 @@ export default function StereoViewer({
         renderer.setScissor(x, y, r.w, r.h);
         renderer.clear();
         eye.cam.layers.set(0);
-        renderer.render(scene, eye.cam);
-        renderer.clearDepth();
-        eye.cam.layers.set(1);
         renderer.render(scene, eye.cam);
         if (navGroup.children.length) {
           eye.cam.layers.set(2);
