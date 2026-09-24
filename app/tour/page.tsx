@@ -35,7 +35,6 @@ export default function TourPage() {
 
   const [gyro, setGyro] = useState(false);
   const [gyroMsg, setGyroMsg] = useState<string | null>(null);
-  const [tryMerge, setTryMerge] = useState(true);
   const [full, setFull] = useState(false);
   const [picked, setCurrent] = useState<string | null>(null);
   const [active, setActive] = useState(0);
@@ -90,7 +89,7 @@ export default function TourPage() {
     async (room: Room): Promise<RoomModel | null> => {
       const ids = roomPhotos[room.id] ?? [];
       if (!ids.length || !graph) return null;
-      const key = `${room.id}:${ids.join(",")}:${tryMerge}`;
+      const key = `${room.id}:${ids.join(",")}`;
       const hit = models.current.get(key);
       if (hit) return hit;
       const model = await buildRoomModel({
@@ -100,12 +99,13 @@ export default function TourPage() {
         photos: ids.map((id) => photos.find((p) => p.id === id)!).filter(Boolean),
         matches: project.matches,
         depth: project.depth,
-        tryMerge,
+        // Each photo is a static shot from its own viewpoint, so there's nothing to merge.
+        tryMerge: false,
       });
       models.current.set(key, model);
       return model;
     },
-    [roomPhotos, graph, floorPlan, photos, project.matches, project.depth, tryMerge],
+    [roomPhotos, graph, floorPlan, photos, project.matches, project.depth],
   );
 
   // Room change → build model, then crossfade.
@@ -177,7 +177,20 @@ export default function TourPage() {
   const model = top?.model ?? null;
   const layerCount = model?.layers.length ?? 0;
   const layer = model?.layers[Math.min(active, layerCount - 1)];
-  const unplaced = !!model?.layers.some((l) => project.matches[l.photo.id]?.headingDeg == null);
+  // Viewpoints in clockwise order of the way each photo faces (unplaced photos last), so a
+  // swipe or the Viewpoint button turns you round the room instead of jumping about.
+  const order = (() => {
+    const heading = (i: number) => project.matches[model!.layers[i].photo.id]?.headingDeg;
+    return Array.from({ length: layerCount }, (_, i) => i).sort((a, b) => {
+      const ha = heading(a), hb = heading(b);
+      if (ha == null || hb == null) return Number(ha == null) - Number(hb == null) || a - b;
+      return (((ha % 360) + 360) % 360) - (((hb % 360) + 360) % 360) || a - b;
+    });
+  })();
+  const turn = (dir: 1 | -1) => {
+    const at = Math.max(0, order.indexOf(Math.min(active, layerCount - 1)));
+    setActive(order[(at + dir + layerCount) % layerCount]);
+  };
 
   /** Show the overlay and (re)start its auto-hide timer. */
   const poke = () => {
@@ -193,11 +206,7 @@ export default function TourPage() {
   };
 
   // Where each neighbouring room lies relative to the way the current photo faces.
-  const viewHeading = (() => {
-    if (!layer) return 0;
-    if (model?.mode === "merged") return (-layer.pose.yaw * 180) / Math.PI;
-    return project.matches[layer.photo.id]?.headingDeg ?? 0;
-  })();
+  const viewHeading = layer ? (project.matches[layer.photo.id]?.headingDeg ?? 0) : 0;
   const navTargets = (() => {
     if (!room || !project.graph) return [];
     const rooms = repairCentroids(project.graph.rooms.map((r) => ({ ...r })));
@@ -239,6 +248,7 @@ export default function TourPage() {
                   setCurrent(id);
                 }}
                 onTap={toggleOverlay}
+                onSwipe={s.key === top?.key ? turn : undefined}
                 activeLayer={s.key === top?.key ? active : 0}
                 gyro={gyro}
                 exiting={s.phase === "exit"}
@@ -281,8 +291,8 @@ export default function TourPage() {
         {overlay && !!model && !navTargets.length && <div className="nav-hint">No connected rooms</div>}
         <div className="stage-tools">
           {layerCount > 1 && (
-            <button className="btn small" onClick={() => setActive((a) => (a + 1) % layerCount)} title="Next viewpoint in this room">
-              {model?.mode === "merged" ? "Viewpoint" : "Photo"} {active + 1}/{layerCount} ›
+            <button className="btn small" onClick={() => turn(1)} title="Next viewpoint in this room, turning clockwise (or swipe the view)">
+              Viewpoint {order.indexOf(Math.min(active, layerCount - 1)) + 1}/{layerCount} ›
             </button>
           )}
           <button className="btn small" onClick={toggleGyro} aria-pressed={gyro}>
@@ -312,21 +322,11 @@ export default function TourPage() {
         {model && (
           <div className="row small muted" style={{ justifyContent: "space-between" }}>
             <span>
-              {model.mode === "merged"
-                ? `${model.layers.filter((l) => l.registered).length} photos merged into one 3D room · drag to look around`
-                : layerCount > 1
-                  ? `${layerCount} photos, shown one at a time${
-                      !tryMerge ? "" : unplaced ? " · run Place cameras on Analyze to merge them" : " (couldn't align them)"
-                    }`
-                  : "Single photo · depth-shifted stereo"}
-              {layer && !layer.registered && model.mode === "merged" && " · this photo isn't aligned"}
+              {layerCount > 1
+                ? `${layerCount} viewpoints · swipe the view sideways to turn to the next`
+                : "Single photo · depth-shifted stereo"}
               {model.depthSource === "heuristic" && " · rough depth guess"}
             </span>
-            {layerCount > 1 && (
-              <label className="row" style={{ gap: 6 }}>
-                <input type="checkbox" checked={tryMerge} onChange={(e) => setTryMerge(e.target.checked)} /> merge photos
-              </label>
-            )}
           </div>
         )}
       </div>
