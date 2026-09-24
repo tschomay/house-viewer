@@ -52,6 +52,38 @@ export default function StereoViewer({ model, layout, strength, activeLayer, gyr
     const disposables: { dispose(): void }[] = [];
     const loader = new THREE.TextureLoader();
 
+    // Seam feathering (merged rooms): when you turn towards a neighbouring
+    // photo, the active photo's left/right edges fade over its last few percent
+    // so the two blend instead of cutting hard. At rest the photo fills the
+    // view exactly, so there the fade is off (it would only vignette the photo).
+    // Strength is set per frame by squeezing the ramp's texture coordinates.
+    const FEATHER_EDGE = 0.08;
+    const feather = (() => {
+      const n = 256;
+      const c = document.createElement("canvas");
+      c.width = n;
+      c.height = 1;
+      const g = c.getContext("2d")!;
+      const img = g.createImageData(n, 1);
+      for (let x = 0; x < n; x++) {
+        const u = (x + 0.5) / n;
+        const t = Math.min(1, Math.min(u, 1 - u) / FEATHER_EDGE);
+        img.data[x * 4] = img.data[x * 4 + 1] = img.data[x * 4 + 2] = 255 * t * t * (3 - 2 * t);
+        img.data[x * 4 + 3] = 255;
+      }
+      g.putImageData(img, 0, 0);
+      const t = new THREE.CanvasTexture(c);
+      t.wrapS = t.wrapT = THREE.ClampToEdgeWrapping;
+      disposables.push(t);
+      return t;
+    })();
+    const setFeather = (k: number) => {
+      // k = 0: sample only the flat middle (no fade); k = 1: the full ramp.
+      const span = 1 - 2 * FEATHER_EDGE * (1 - k);
+      feather.repeat.x = span;
+      feather.offset.x = (1 - span) / 2;
+    };
+
     const groups = model.layers.map((layer) => {
       const tex = loader.load(layer.photo.dataUrl);
       tex.colorSpace = THREE.SRGBColorSpace;
@@ -61,6 +93,7 @@ export default function StereoViewer({ model, layout, strength, activeLayer, gyr
       geo.setAttribute("uv", new THREE.BufferAttribute(layer.uvs, 2));
       geo.setIndex(new THREE.BufferAttribute(layer.indices, 1));
       const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
+      const featherMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide, alphaMap: feather, transparent: true });
       const mesh = new THREE.Mesh(geo, mat);
 
       // Backdrop: the photo on a plane just past the far wall, dimmed, to fill disocclusion holes.
@@ -79,8 +112,8 @@ export default function StereoViewer({ model, layout, strength, activeLayer, gyr
       g.position.set(layer.pose.tx, 0, layer.pose.tz);
       g.scale.setScalar(layer.pose.scale);
       scene.add(g);
-      disposables.push(tex, geo, mat, backMat, back.geometry);
-      return { g, back, mesh };
+      disposables.push(tex, geo, mat, featherMat, backMat, back.geometry);
+      return { g, back, mesh, mat, featherMat };
     });
 
     const photo = model.layers[0]?.photo;
@@ -180,11 +213,14 @@ export default function StereoViewer({ model, layout, strength, activeLayer, gyr
       // Pass 0: backdrop + the room's other photos. Pass 1: the active photo, drawn over
       // pass 0 so a slightly misplaced neighbour can never cover the current view; the
       // others only show through its holes and when you look beyond its edges.
-      groups.forEach(({ g, back, mesh }, i) => {
+      groups.forEach(({ g, back, mesh, mat, featherMat }, i) => {
         g.visible = merged ? model.layers[i].registered || i === idx : i === idx;
         back.visible = i === idx;
         mesh.layers.set(i === idx ? 1 : 0);
+        // Feather only where there are neighbours to blend into.
+        mesh.material = merged && i === idx ? featherMat : mat;
       });
+      if (merged) setFeather(Math.min(1, Math.abs(look.yaw) / 0.15));
 
       // Camera sits where the active photo was taken, looking the same way.
       const p = layer.pose;
