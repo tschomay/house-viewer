@@ -187,3 +187,22 @@ input[type="range"] { accent-color: var(--accent); width: 140px; }
 .linklike { border: none; background: none; padding: 0; color: var(--accent); font: inherit; cursor: pointer; text-decoration: underline; }
 .steps-list { padding-left: 20px; margin: 8px 0; }
 .steps-list li { margin: 6px 0; }
+
+/* Tour: tap-to-show directions + sliders over the 3D view */
+.nav-overlay { position: absolute; inset: 0; z-index: 4; pointer-events: none; }
+.nav-arrow {
+  position: absolute; transform: translate(-50%, -50%); pointer-events: auto;
+  display: inline-flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 999px;
+  background: rgba(14, 16, 20, 0.78); color: #fff; border: 1px solid rgba(255, 255, 255, 0.25);
+  font: inherit; font-weight: 600; backdrop-filter: blur(6px); white-space: nowrap;
+}
+.nav-arrow.dim { opacity: 0.7; font-weight: 400; }
+.nav-arrow .glyph { display: inline-block; font-size: 1.2em; line-height: 1; }
+.nav-sliders {
+  position: absolute; left: 50%; bottom: 56px; transform: translateX(-50%); pointer-events: auto;
+  padding: 6px 12px; border-radius: 12px; background: rgba(14, 16, 20, 0.78); backdrop-filter: blur(6px);
+}
+.nav-hint {
+  position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); z-index: 3; pointer-events: none;
+  font-size: 12px; color: rgba(255, 255, 255, 0.55);
+}
