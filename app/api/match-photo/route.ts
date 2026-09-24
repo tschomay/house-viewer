@@ -17,8 +17,8 @@ export const POST = gated(async (req, creds) => {
     return Response.json({ error: "photoId, photo and graph are required" }, { status: 400 });
   }
   try {
-    const { raw, parsed } = await matchPhoto(creds.geminiKey, body.photo, body.graph, body.floorPlan);
-    return Response.json({ raw, match: normalizePhotoMatch(body.photoId, parsed, body.graph) });
+    const { raw, parsed, usage } = await matchPhoto(creds.geminiKey, body.photo, body.graph, body.floorPlan);
+    return Response.json({ raw, match: normalizePhotoMatch(body.photoId, parsed, body.graph), usage });
   } catch (e) {
     const status = e instanceof MissingKeyError ? 503 : 502;
     console.error("[match-photo]", e);

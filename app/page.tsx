@@ -2,10 +2,12 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useState, type DragEvent } from "react";
+import { useEffect, useState, type DragEvent } from "react";
 import { useProject, useServerStatus } from "@/lib/client/project";
 import { apiFetch } from "@/lib/client/access";
 import AccessPanel from "@/components/AccessPanel";
+import BookmarkletCard from "@/components/BookmarkletCard";
+import { bookmarkletImportResult, parseBookmarkletHash } from "@/lib/bookmarklet";
 import { importRemoteImage, toListingImage } from "@/lib/client/images";
 import { buildDemo, DEMO_LISTING_LABEL } from "@/lib/client/demo";
 import type { ImportResult, ListingImage } from "@/lib/types";
@@ -38,6 +40,14 @@ export default function IntakePage() {
   const [demoProgress, setDemoProgress] = useState<string | null>(null);
   const [over, setOver] = useState<"photo" | "floorplan" | null>(null);
   const [addError, setAddError] = useState<string | null>(null);
+  // An import handed over by the bookmarklet (in the URL hash), waiting for the project to load and access to unlock.
+  const [pending, setPending] = useState<ImportResult | null>(null);
+
+  useEffect(() => {
+    const payload = parseBookmarkletHash(window.location.hash);
+    if (!payload) return;
+    queueMicrotask(() => setPending(bookmarkletImportResult(payload)));
+  }, []);
 
   async function runImport() {
     setImportNote(null);
@@ -54,6 +64,11 @@ export default function IntakePage() {
     } catch (e) {
       result = { ok: false, steps: [], photos: [], floorPlans: [], error: (e as Error).message };
     }
+    await downloadImages(result);
+  }
+
+  async function downloadImages(result: ImportResult) {
+    setImportNote(null);
     dispatch({ type: "import", result });
     const todo = [
       ...result.floorPlans.map((f) => ({ ...f, kind: "floorplan" as const })),
@@ -71,6 +86,21 @@ export default function IntakePage() {
     if (failed) setImportNote(`${failed} of ${todo.length} images couldn't be downloaded (the image host may block us).`);
     setImporting(null);
   }
+
+  useEffect(() => {
+    if (!pending || !ready || !status?.access.ok) return;
+    const result = pending;
+    // Drop the hash only now, so reloading while still locked doesn't lose the list.
+    history.replaceState(null, "", window.location.pathname + window.location.search);
+    queueMicrotask(() => {
+      setPending(null);
+      // A bookmarklet import starts a new listing.
+      dispatch({ type: "reset" });
+      dispatch({ type: "input", value: result.resolvedUrl ?? "" });
+      void downloadImages(result);
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- downloadImages is recreated each render; this runs once per pending import
+  }, [pending, ready, status]);
 
   async function addFiles(files: FileList | File[] | null, kind: ListingImage["kind"]) {
     if (!files) return;
@@ -161,6 +191,13 @@ export default function IntakePage() {
           </button>
         </div>
         {locked && <p className="small muted">Unlock above to use auto-import.</p>}
+        {pending && (
+          <div className="notice info" style={{ marginTop: 8 }}>
+            The bookmarklet sent {pending.photos.length} photo{pending.photos.length === 1 ? "" : "s"}
+            {pending.floorPlans.length ? ` and ${pending.floorPlans.length} floor plan${pending.floorPlans.length === 1 ? "" : "s"}` : ""}.
+            {locked ? " Unlock above and they'll download." : " Downloading…"}
+          </div>
+        )}
         <p className="small muted" style={{ marginBottom: 0 }}>
           Auto-import often fails: Zillow, Redfin and others block automated requests, and page layouts change. You can always
           add photos and the floor plan yourself below.
@@ -199,6 +236,8 @@ export default function IntakePage() {
           </div>
         )}
       </section>
+
+      <BookmarkletCard />
 
       <section className="card">
         <div className="card-head">
