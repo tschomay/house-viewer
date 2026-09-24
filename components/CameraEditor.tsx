@@ -49,6 +49,7 @@ export default function CameraEditor({ graph, floorPlan, photo, match, onSave, o
           onPlanTap={setPos}
           height={300}
           cameras={[{ ...pos, headingDeg: heading }]}
+          focus={room?.bbox}
         />
       </div>
       <div className="controls">

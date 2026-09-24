@@ -26,6 +26,28 @@ function subscribe(fn: () => void): () => void {
   };
 }
 
+/** "landscape" or "portrait", live. */
+export function useOrientation(): "landscape" | "portrait" {
+  return useSyncExternalStore(
+    (fn) => {
+      const mq = window.matchMedia("(orientation: landscape)");
+      mq.addEventListener("change", fn);
+      return () => mq.removeEventListener("change", fn);
+    },
+    () => (window.matchMedia("(orientation: landscape)").matches ? "landscape" : "portrait"),
+    () => "portrait",
+  );
+}
+
+/**
+ * Stereo pair width, remembered separately for portrait and landscape: a
+ * landscape phone is much wider than the eyes are apart, portrait is not.
+ */
+export function usePairWidth(): [number, (w: number) => void] {
+  const orientation = useOrientation();
+  return usePref<number>(`pairWidth:${orientation}`, orientation === "landscape" ? 0.7 : 1);
+}
+
 export function usePref<T extends string | number | boolean>(key: string, fallback: T): [T, (v: T) => void] {
   const value = useSyncExternalStore(subscribe, () => read(key, fallback), () => fallback);
   const set = useCallback(

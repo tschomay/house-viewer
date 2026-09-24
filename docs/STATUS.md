@@ -34,6 +34,12 @@ The original brief (goals, pipeline, build order, open questions) is summarized 
 - **Width slider** (side-by-side layouts): squeezes the stereo pair towards the middle of the screen. A landscape phone is wider than the viewer's eyes are apart, which made the pair hard to fuse. Saved per device, as are Depth and layout (`lib/client/prefs.ts`).
 - **Tap for directions**: a tap (not a drag) on the 3D view shows arrow buttons to each connected room, placed by where the room lies relative to the way the current photo faces (↑ ahead, ↙ behind-left…), plus Depth/Width sliders. Tap an arrow to walk there. Auto-hides after 8 s. Checked in a landscape phone-sized browser: arrows point correctly from the demo living room, the Width slider works, and the Kitchen arrow navigates.
 
+## More tour/map controls (user requests, 2026-09-24)
+
+- **Navigation arrows in 3D**: the tap-to-show directions are now Street View-style chevrons drawn on the floor in the scene, with a floating room label, so they appear in depth in the stereo pair. Tapping one in either eye's image walks there: raycast per eye viewport; three.js's StereoCamera doesn't update `projectionMatrixInverse`, so it's refreshed before each raycast. Rooms beside or behind you are pinned to the lower edge of the view, still pointing their true way. Checked in a landscape viewport: tapping the Kitchen arrow navigates. HTML buttons remain only for rooms with no photos.
+- **Width is remembered separately for portrait and landscape** (`usePairWidth`; landscape starts at 0.7).
+- **Zoomable floor plan maps** (Analyze page and Set camera): pinch or wheel to zoom, drag to pan when zoomed, +/−/⤢ buttons. The page itself doesn't zoom. Dots and arrows keep their on-screen size, and overlapping room labels are hidden until you zoom in. Set camera opens zoomed onto the photo's room, and a tap places the camera where you tapped. Checked on the user's real house export.
+
 ## Deployment
 
 - Vercel project **house-viewer** (team `tschomay`), linked to this repo; `main` auto-deploys to production at https://house-viewer-tschomay.vercel.app.
