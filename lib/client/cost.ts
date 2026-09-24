@@ -5,7 +5,7 @@
 import { useSyncExternalStore } from "react";
 import type { GeminiUsage } from "../cost";
 
-export type CostAction = "graph" | "match";
+export type CostAction = "graph" | "match" | "place";
 
 export interface CostRun {
   calls: number;

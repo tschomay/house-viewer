@@ -105,3 +105,27 @@ export function grayToDataUrl(width: number, height: number, data: ArrayLike<num
   ctx.putImageData(img, 0, 0);
   return canvas.toDataURL("image/png");
 }
+
+/**
+ * Re-encode an image at ≤ maxEdge px, optionally with a red rectangle drawn on
+ * it (normalized coords): used to point Gemini at one room on the floor plan.
+ */
+export async function redrawImage(
+  dataUrl: string,
+  maxEdge: number,
+  outline?: { x0: number; y0: number; x1: number; y1: number } | null,
+): Promise<string> {
+  const img = await loadImage(dataUrl);
+  const scale = Math.min(1, maxEdge / Math.max(img.naturalWidth, img.naturalHeight));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(img.naturalWidth * scale);
+  canvas.height = Math.round(img.naturalHeight * scale);
+  const ctx = canvas.getContext("2d")!;
+  ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+  if (outline) {
+    ctx.strokeStyle = "#e11";
+    ctx.lineWidth = Math.max(3, canvas.width / 250);
+    ctx.strokeRect(outline.x0 * canvas.width, outline.y0 * canvas.height, (outline.x1 - outline.x0) * canvas.width, (outline.y1 - outline.y0) * canvas.height);
+  }
+  return blobToDataUrl(await canvasToJpeg(canvas));
+}

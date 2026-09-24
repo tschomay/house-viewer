@@ -1,7 +1,8 @@
 import "server-only";
 import { GoogleGenAI } from "@google/genai";
 import { geminiUsage, type GeminiUsage } from "./cost";
-import type { RoomGraph } from "./types";
+import { PLACEMENT_SCHEMA, placementPrompt } from "./placement";
+import type { Room, RoomGraph } from "./types";
 
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
 
@@ -130,4 +131,42 @@ Return only JSON matching the schema.`,
   });
   const raw = res.text ?? "";
   return { raw, parsed: JSON.parse(raw), usage: geminiUsage(GEMINI_MODEL, res.usageMetadata, process.env) };
+}
+
+/**
+ * Place several photos of one (already known) room on the floor plan in one
+ * call. `floorPlanDataUrl` should have the room outlined (the prompt says red).
+ */
+export async function placePhotos(
+  apiKey: string | null,
+  room: Room,
+  graph: RoomGraph,
+  photoDataUrls: string[],
+  floorPlanDataUrl: string,
+): Promise<{ raw: string; parsed: unknown; usage: GeminiUsage }> {
+  const parts = [
+    { text: "FLOOR PLAN (the room is outlined in red):" },
+    { inlineData: splitDataUrl(floorPlanDataUrl) },
+    ...photoDataUrls.flatMap((url, i) => [{ text: `PHOTO ${i + 1}:` }, { inlineData: splitDataUrl(url) }]),
+    { text: placementPrompt(room, graph, photoDataUrls.length) },
+  ];
+  // Several photos means a long think (30–60 s). Streaming with thought summaries
+  // keeps bytes flowing, so proxies with an idle timeout don't cut the call.
+  const stream = await client(apiKey).models.generateContentStream({
+    model: GEMINI_MODEL,
+    contents: [{ role: "user", parts }],
+    config: {
+      responseMimeType: "application/json",
+      responseJsonSchema: PLACEMENT_SCHEMA,
+      temperature: 0.2,
+      thinkingConfig: { includeThoughts: true },
+    },
+  });
+  let raw = "";
+  let usageMetadata;
+  for await (const chunk of stream) {
+    for (const part of chunk.candidates?.[0]?.content?.parts ?? []) if (!part.thought && part.text) raw += part.text;
+    usageMetadata = chunk.usageMetadata ?? usageMetadata;
+  }
+  return { raw, parsed: JSON.parse(raw), usage: geminiUsage(GEMINI_MODEL, usageMetadata, process.env) };
 }

@@ -64,7 +64,7 @@ export default function StereoViewer({ model, layout, strength, activeLayer, gyr
       const mesh = new THREE.Mesh(geo, mat);
 
       // Backdrop: the photo on a plane just past the far wall, dimmed, to fill disocclusion holes.
-      const far = DEFAULT_INTRINSICS.far * 1.6;
+      const far = layer.far * 1.1;
       const hfov = (DEFAULT_INTRINSICS.hfovDeg * Math.PI) / 180;
       const bw = 2 * far * Math.tan(hfov / 2) * 1.02;
       const bh = (bw * layer.photo.height) / layer.photo.width;
