@@ -12,6 +12,7 @@ import type { GeminiUsage } from "@/lib/cost";
 import { estimateDepth, onModelProgress, type DepthEngine } from "@/lib/client/depth";
 import { groupByRoom } from "@/lib/room-graph";
 import { placementBatches, type Placement } from "@/lib/placement";
+import { sortBatches, type SortPhotoInput, type SortResult } from "@/lib/sorting";
 import { redrawImage } from "@/lib/client/images";
 import { MATCH_CONFIDENCE_THRESHOLD, type PhotoMatch, type RoomGraph } from "@/lib/types";
 
@@ -36,6 +37,7 @@ export default function AnalyzePage() {
   const [matchBusy, setMatchBusy] = useState<Busy>(null);
   const [matchErrors, setMatchErrors] = useState<Record<string, string>>({});
   const [placeBusy, setPlaceBusy] = useState<Busy>(null);
+  const [sortNote, setSortNote] = useState<string | null>(null);
   const [placeErrors, setPlaceErrors] = useState<string[]>([]);
   const [depthBusy, setDepthBusy] = useState<Busy>(null);
   const [depthErrors, setDepthErrors] = useState<Record<string, string>>({});
@@ -77,6 +79,72 @@ export default function AnalyzePage() {
     } finally {
       setGraphBusy(false);
     }
+  }
+
+  /**
+   * Sort every photo in one call (per ≤36 photos), comparing them with each
+   * other. Manual picks go along as fixed anchors and are never changed.
+   */
+  async function runSort() {
+    if (!graph) return;
+    const graphKey = hashString(JSON.stringify(graph));
+    const inputs = photos.map((p): SortPhotoInput => {
+      const m = project.matches[p.id];
+      // Listing captions help; uploaded filenames and demo labels would just leak or mislead.
+      const label = p.source === "import" ? p.label : undefined;
+      if (!m?.manual) return { id: p.id, label };
+      return m.status === "exterior" ? { id: p.id, label, fixedExterior: true } : { id: p.id, label, fixedRoomId: m.roomId };
+    });
+    const batches = sortBatches(inputs);
+    setMatchErrors({});
+    setSortNote(null);
+    beginRun("match");
+    setMatchBusy({ label: "Sorting photos", done: 0, total: inputs.length });
+    const context: string[] = [];
+    let done = 0;
+    for (const batch of batches) {
+      let fresh = false;
+      try {
+        const key = `sort:${graphKey}:${hashString(JSON.stringify({ batch, context }))}`;
+        const res = await cached(key, async () => {
+          const [plan, ...shots] = await Promise.all([
+            floorPlan ? redrawImage(floorPlan.dataUrl, 1600) : Promise.resolve(undefined),
+            ...batch.map((p) => redrawImage(byId.get(p.id)!.dataUrl, 640)),
+          ]);
+          type Res = SortResult & { raw: string; usage?: GeminiUsage };
+          const body = { graph, floorPlan: plan, context, photos: batch.map((p, i) => ({ ...p, dataUrl: shots[i] })) };
+          const r = await postJson<Res>("/api/sort-photos", body).catch((e: Error & { status?: number }) =>
+            e.status == null || e.status >= 500 ? postJson<Res>("/api/sort-photos", body) : Promise.reject(e),
+          );
+          fresh = true;
+          recordUsage("match", r.usage);
+          console.log("[sort-photos]", r.raw);
+          return r;
+        });
+        if (!fresh) recordUsage("match", null);
+        for (const match of res.matches) {
+          const prev = project.matches[match.photoId];
+          // Same room as before: keep the camera placement, it's still valid.
+          const keep = prev?.placed && prev.roomId === match.roomId;
+          dispatch({
+            type: "match",
+            match: keep ? { ...match, headingDeg: prev.headingDeg, cameraPosition: prev.cameraPosition, placed: true, placementNote: prev.placementNote } : match,
+          });
+        }
+        for (const [photoId, roomId] of Object.entries(res.disagreements)) {
+          const prev = project.matches[photoId];
+          if (prev && roomId) dispatch({ type: "match", match: { ...prev, suggestedRoomId: roomId } });
+        }
+        if (res.notes) setSortNote(res.notes);
+        const label = (id: string | null) => graph.rooms.find((r) => r.id === id)?.label ?? "unsorted";
+        for (const m of res.matches) context.push(`- ${label(m.roomId)}: ${m.appearance ?? "(no description)"}`);
+      } catch (e) {
+        for (const p of batch) setMatchErrors((m) => ({ ...m, [p.id]: (e as Error).message }));
+      }
+      done += batch.length;
+      setMatchBusy({ label: "Sorting photos", done, total: inputs.length });
+    }
+    setMatchBusy(null);
   }
 
   async function runMatching() {
@@ -269,10 +337,11 @@ export default function AnalyzePage() {
           ) : matchErrors[photoId] ? (
             <span className="badge bad" title={matchErrors[photoId]}>match failed</span>
           ) : null}
+          {m?.appearance && <div className="small" style={{ fontSize: 11 }}>{m.appearance}</div>}
           {m?.reasoning && <div className="muted" style={{ fontSize: 11 }}>{m.reasoning}</div>}
           {m?.suggestedRoomId && graph?.rooms.some((r) => r.id === m.suggestedRoomId) && (
             <div className="notice small" style={{ padding: "4px 6px" }}>
-              Placement pass thinks this is the {graph.rooms.find((r) => r.id === m.suggestedRoomId)!.label}.{" "}
+              Gemini thinks this is the {graph.rooms.find((r) => r.id === m.suggestedRoomId)!.label}.{" "}
               <button className="linklike" onClick={() => assign(photoId, m.suggestedRoomId!)}>Move it</button>
             </div>
           )}
@@ -368,11 +437,18 @@ export default function AnalyzePage() {
         ) : (
           <>
             <div className="row">
-              <button className="btn primary" onClick={runMatching} disabled={!!matchBusy || !status?.gemini}>
-                {matchBusy ? <><span className="spinner" /> {matchBusy.done}/{matchBusy.total}</> : Object.keys(project.matches).length ? "Re-match with Gemini" : "Match with Gemini"}
+              <button className="btn primary" onClick={runSort} disabled={!!matchBusy || !!placeBusy || !status?.gemini}>
+                {matchBusy ? <><span className="spinner" /> {matchBusy.done}/{matchBusy.total}</> : Object.keys(project.matches).length ? "Re-check with Gemini" : "Sort with Gemini"}
               </button>
-              <span className="small muted">Or pick rooms by hand below. Manual picks are kept on re-runs.</span>
+              <button className="btn small ghost" onClick={runMatching} disabled={!!matchBusy || !!placeBusy || !status?.gemini} title="The older, pricier path: one call per photo">
+                One by one
+              </button>
             </div>
+            <p className="small muted">
+              One call sorts every photo, comparing them with each other: listing order, wall colour, flooring, ceiling shape. Move
+              photos by hand below, then re-check: your picks are kept, and Gemini uses them to sort the rest (and says if it disagrees).
+            </p>
+            {sortNote && <div className="notice small">{sortNote}</div>}
             <CostNote action="match" />
             {matchBusy && <div className="progress"><div style={{ width: `${(100 * matchBusy.done) / Math.max(1, matchBusy.total)}%` }} /></div>}
 

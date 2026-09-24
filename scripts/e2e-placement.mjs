@@ -2,6 +2,7 @@
 // Usage: MODE=perturb|gemini DEPTH_ENGINE=truth|browser ACCESS_PASSWORD=... node scripts/e2e-placement.mjs [baseUrl]
 //   perturb: Gemini-sized errors (±25°, ~0.7 m) are added to the true poses; no API calls.
 //   gemini:  camera poses are wiped (as after manual room picks), then "Place cameras" runs for real (6 calls, ≈$0.1–0.2).
+//   sort:    all matches are wiped, then "Sort with Gemini" runs for real (1 call) and rooms are scored; then exits.
 import { createRequire } from "node:module";
 const require = createRequire(import.meta.url);
 let playwright;
@@ -86,6 +87,11 @@ if (mode === "perturb") {
       m.confidence = 0.8;
     }
   });
+} else if (mode === "sort") {
+  await editProject((p) => {
+    p.matches = {};
+    p.matchRaw = {};
+  });
 } else {
   await editProject((p) => {
     for (const m of Object.values(p.matches)) Object.assign(m, { headingDeg: null, cameraPosition: null, manual: true, reasoning: "Assigned by you." });
@@ -93,6 +99,39 @@ if (mode === "perturb") {
 }
 await page.reload();
 await page.waitForSelector("text=6 rooms");
+
+const readProject = () =>
+  page.evaluate(
+    () =>
+      new Promise((res) => {
+        const r = indexedDB.open("house-viewer", 1);
+        r.onsuccess = () => (r.result.transaction("kv").objectStore("kv").get("project:current").onsuccess = (e) => res(e.target.result));
+      }),
+  );
+
+if (mode === "sort") {
+  const t0 = Date.now();
+  await page.getByRole("button", { name: "Sort with Gemini" }).click();
+  await page.waitForSelector(".card .spinner", { timeout: 10_000 }).catch(() => {});
+  await page.waitForFunction(() => !document.querySelector(".card .spinner"), null, { timeout: 600_000 });
+  console.log(`sort took ${((Date.now() - t0) / 1000).toFixed(1)}s`);
+  await page.waitForTimeout(1500);
+  console.log("cost:", await page.locator(".cost-note").first().innerText().catch(() => "?"));
+  const p = await readProject();
+  const label = Object.fromEntries(p.images.map((i) => [i.id, i.label]));
+  const roomLabel = Object.fromEntries(p.graph.rooms.map((r) => [r.id, r.label]));
+  let right = 0;
+  for (const img of p.images.filter((i) => i.kind === "photo")) {
+    const m = p.matches[img.id];
+    const truth = truthFor(label[img.id]).room;
+    const got = m?.roomId ? roomLabel[m.roomId] : m?.status ?? "missing";
+    if (got === truth) right++;
+    console.log(`  ${label[img.id].padEnd(14)} → ${String(got).padEnd(12)} ${got === truth ? "✓" : "✗"} ${Math.round((m?.confidence ?? 0) * 100)}%  heading ${m?.headingDeg ?? "–"}  | ${m?.appearance ?? ""}`);
+  }
+  console.log(`${right}/${p.images.filter((i) => i.kind === "photo").length} in the right room`);
+  await browser.close();
+  process.exit(0);
+}
 
 if (mode === "gemini") {
   const t0 = Date.now();
