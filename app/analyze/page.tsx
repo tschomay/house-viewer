@@ -87,7 +87,7 @@ export default function AnalyzePage() {
    * Sort every photo in one call (per ≤36 photos), comparing them with each
    * other. Manual picks go along as fixed anchors and are never changed.
    */
-  async function runSort() {
+  async function runSort(careful = false) {
     if (!graph) return;
     const graphKey = hashString(JSON.stringify(graph));
     const inputs = photos.map((p): SortPhotoInput => {
@@ -107,14 +107,14 @@ export default function AnalyzePage() {
     for (const batch of batches) {
       let fresh = false;
       try {
-        const key = `sort:${graphKey}:${hashString(JSON.stringify({ batch, context }))}`;
+        const key = `sort:${careful ? "pro" : "fast"}:${graphKey}:${hashString(JSON.stringify({ batch, context }))}`;
         const res = await cached(key, async () => {
           const [plan, ...shots] = await Promise.all([
             floorPlan ? redrawImage(floorPlan.dataUrl, 1600) : Promise.resolve(undefined),
             ...batch.map((p) => redrawImage(byId.get(p.id)!.dataUrl, 640)),
           ]);
           type Res = SortResult & { raw: string; usage?: GeminiUsage };
-          const body = { graph, floorPlan: plan, context, photos: batch.map((p, i) => ({ ...p, dataUrl: shots[i] })) };
+          const body = { graph, floorPlan: plan, context, careful, photos: batch.map((p, i) => ({ ...p, dataUrl: shots[i] })) };
           const r = await postJson<Res>("/api/sort-photos", body).catch((e: Error & { status?: number }) =>
             e.status == null || e.status >= 500 ? postJson<Res>("/api/sort-photos", body) : Promise.reject(e),
           );
@@ -146,44 +146,6 @@ export default function AnalyzePage() {
       done += batch.length;
       setMatchBusy({ label: "Sorting photos", done, total: inputs.length });
     }
-    setMatchBusy(null);
-  }
-
-  async function runMatching() {
-    if (!graph) return;
-    const graphKey = hashString(JSON.stringify(graph));
-    const todo = photos.filter((p) => !project.matches[p.id]?.manual);
-    setMatchErrors({});
-    beginRun("match");
-    setMatchBusy({ label: "Matching photos to rooms", done: 0, total: todo.length });
-    let done = 0;
-    const queue = [...todo];
-    await Promise.all(
-      Array.from({ length: 3 }, async () => {
-        for (let p = queue.shift(); p; p = queue.shift()) {
-          const photo = p;
-          let fresh = false;
-          try {
-            const { raw, match } = await cached(`match:${graphKey}:${photo.id}`, async () => {
-              const res = await postJson<{ raw: string; match: PhotoMatch; usage?: GeminiUsage }>("/api/match-photo", {
-                photoId: photo.id,
-                photo: photo.dataUrl,
-                graph,
-                floorPlan: floorPlan?.dataUrl,
-              });
-              fresh = true;
-              recordUsage("match", res.usage);
-              return res;
-            });
-            if (!fresh) recordUsage("match", null);
-            dispatch({ type: "match", match, raw });
-          } catch (e) {
-            setMatchErrors((m) => ({ ...m, [photo.id]: (e as Error).message }));
-          }
-          setMatchBusy({ label: "Matching photos to rooms", done: ++done, total: todo.length });
-        }
-      }),
-    );
     setMatchBusy(null);
   }
 
@@ -453,16 +415,22 @@ export default function AnalyzePage() {
         ) : (
           <>
             <div className="row">
-              <button className="btn primary" onClick={runSort} disabled={!!matchBusy || !!placeBusy || !status?.gemini}>
+              <button className="btn primary" onClick={() => runSort()} disabled={!!matchBusy || !!placeBusy || !status?.gemini}>
                 {matchBusy ? <><span className="spinner" /> {matchBusy.done}/{matchBusy.total}</> : Object.keys(project.matches).length ? "Re-check with Gemini" : "Sort with Gemini"}
               </button>
-              <button className="btn small ghost" onClick={runMatching} disabled={!!matchBusy || !!placeBusy || !status?.gemini} title="The older, pricier path: one call per photo">
-                One by one
+              <button
+                className="btn small ghost"
+                onClick={() => runSort(true)}
+                disabled={!!matchBusy || !!placeBusy || !status?.gemini}
+                title="Same comparison with the Pro model: slower and ~15× the cost, for look-alike rooms"
+              >
+                Careful (Pro)
               </button>
             </div>
             <p className="small muted">
               One call sorts every photo, comparing them with each other: listing order, wall colour, flooring, ceiling shape. Move
               photos by hand below, then re-check: your picks are kept, and Gemini uses them to sort the rest (and says if it disagrees).
+              The quick sort uses Gemini Flash (about a cent); if rooms look alike, try <em>Careful</em> with Pro.
             </p>
             {sortNote && <div className="notice small">{sortNote}</div>}
             <CostNote action="match" />
