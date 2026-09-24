@@ -344,6 +344,11 @@ export default function TourPage() {
             ))}
           </div>
         )}
+        {project.graph && (
+          <p className="small" style={{ margin: "0 0 12px" }}>
+            <Link href="/flythrough">Fly through the whole house in 3D →</Link> <span className="muted">(beta: a guided flight through a 3D model built from the plan and photos)</span>
+          </p>
+        )}
         <details className="card">
           <summary><strong>How to see the 3D (cross-eye)</strong></summary>
           <ol className="small muted">

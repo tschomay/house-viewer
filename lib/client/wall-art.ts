@@ -110,7 +110,8 @@ export async function runWallArtJob(
     const json = await r.json().catch(() => ({}));
     if (!r.ok) throw Object.assign(new Error(json.error ?? `HTTP ${r.status}`), { status: r.status });
     usage = json.usage ?? null;
-    return { image: json.image as string, model: json.model as string };
+    // The model answers with a ~600 KB PNG; a JPEG is a sixth of that, which matters in IndexedDB and project exports.
+    return { image: await redrawImage(json.image as string, 1536), model: json.model as string };
   });
   return { art: { roomId: job.roomId, dataUrl: res.image, imagined: job.imagined, model: res.model, key: job.key }, usage };
 }

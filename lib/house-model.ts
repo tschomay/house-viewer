@@ -334,7 +334,9 @@ export function buildHouseModel(graphIn: RoomGraph, planAspect: number, matches:
     if (!walled(r)) continue;
     for (const side of SIDES) {
       const mine = cuts.filter((c) => c.roomId === r.id && c.side === side);
-      walls.push(...wallPieces(r, side, mine, false));
+      // The front door is only open from outside: the inside face is invisible from out there
+      // (walls are one-sided), and from inside the photos show where the real door is.
+      walls.push(...wallPieces(r, side, mine.filter((c) => c.kind !== "front"), false));
       if (r.exterior.includes(side)) walls.push(...wallPieces(r, side, mine.filter((c) => c.kind === "front"), true));
     }
   }
@@ -809,9 +811,13 @@ function sampleWays(ways: Way[], chapterWays: { roomId: string; wayIndex: number
       z = a.z + (b.z - a.z) * f;
       seg = b.seg;
     }
-    const w = ways[Math.min(ways.length - 1, seg + 1)];
+    const from = ways[seg], w = ways[Math.min(ways.length - 1, seg + 1)];
+    // Height never overshoots a stretch's ends (the spline would dip below eye level into the floor).
+    y = Math.min(Math.max(from.y, w.y), Math.max(Math.min(from.y, w.y), y));
+    // Labelled with the nearer end: walking in through a door, you're outside until you're through it.
+    const nearer = Math.hypot(x - from.x, z - from.z) < Math.hypot(x - w.x, z - w.z) ? from : w;
     const stopWay = pausedAt != null ? ways[stopAt.get(pausedAt)!] : null;
-    samples.push({ t: s, x, y, z, yaw: 0, pitch: 0, roomId: w.roomId, floor: w.floor, photoId: stopWay?.stop?.photoId ?? null });
+    samples.push({ t: s, x, y, z, yaw: 0, pitch: 0, roomId: nearer.roomId, floor: Math.max(from.floor, w.floor), photoId: stopWay?.stop?.photoId ?? null });
   }
 
   // Look direction: along the path, looking where you'll be ~1 s ahead; at aerial waypoints, at their target;

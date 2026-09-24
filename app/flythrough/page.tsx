@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import CostNote from "@/components/CostNote";
 import StereoControls from "@/components/StereoControls";
-import type { FlyState, RoomColors } from "@/components/HouseFlythrough";
+import type { DepthLayer, FlyState, RoomColors } from "@/components/HouseFlythrough";
 import type { StereoLayout } from "@/components/StereoViewer";
 import { beginRun, recordUsage } from "@/lib/client/cost";
 import { requestGyroPermission } from "@/lib/client/gyro";
 import { roomPalette } from "@/lib/client/house-palette";
+import { buildLayer } from "@/lib/client/room-model";
+import { DEFAULT_INTRINSICS, farFromRoomSize } from "@/lib/geometry";
 import { usePairWidth, usePref } from "@/lib/client/prefs";
 import { useProject, useServerStatus } from "@/lib/client/project";
 import { runWallArtJob, WALL_ART_USD_PER_ROOM, wallArtJobs } from "@/lib/client/wall-art";
@@ -37,6 +39,7 @@ export default function FlythroughPage() {
   const [fly, setFly] = useState<FlyState>({ t: 0, roomId: null, photoId: null });
   const [xrEnter, setXrEnter] = useState<(() => Promise<void>) | null>(null);
   const [palette, setPalette] = useState<Record<string, RoomColors> | null>(null);
+  const [depthLayers, setDepthLayers] = useState<DepthLayer[] | null>(null);
   const [imagine, setImagine] = useState(false);
   const [careful, setCareful] = useState(false);
   const [artBusy, setArtBusy] = useState<{ done: number; total: number } | null>(null);
@@ -58,6 +61,32 @@ export default function FlythroughPage() {
       alive = false;
     };
   }, [model, photosById]);
+
+  // Depth meshes for placed photos that have depth maps (from the Analyze page). Built once, on device.
+  useEffect(() => {
+    if (!model) return;
+    let alive = true;
+    const sizes = new Map((project.graph?.rooms ?? []).map((r) => [r.id, r.sizeM]));
+    const shots = model.rooms.flatMap((r) => r.photos).filter((p) => project.depth[p.photoId] && photosById.has(p.photoId));
+    void (async () => {
+      const out: DepthLayer[] = [];
+      for (const s of shots) {
+        const photo = photosById.get(s.photoId)!;
+        const intr = { ...DEFAULT_INTRINSICS, far: farFromRoomSize(sizes.get(project.matches[s.photoId]?.roomId ?? "")) };
+        try {
+          const l = await buildLayer(photo, project.depth[s.photoId], intr);
+          out.push({ photoId: s.photoId, positions: l.positions, uvs: l.uvs, indices: l.indices });
+        } catch {
+          /* a bad depth map just means no 3D pop for that photo */
+        }
+        if (!alive) return;
+      }
+      setDepthLayers(out);
+    })();
+    return () => {
+      alive = false;
+    };
+  }, [model, project.depth, project.graph, project.matches, photosById]);
 
   const jobs = useMemo(() => (model ? wallArtJobs(model, project.matches, { imagine, careful }) : []), [model, project.matches, imagine, careful]);
   const todo = jobs.filter((j) => wallArt[j.roomId]?.key !== j.key);
@@ -154,13 +183,14 @@ export default function FlythroughPage() {
   return (
     <main className="tour">
       <div ref={stageRef} className={`stage fly ${full ? "full" : ""}`} data-sbs={layout === "cross" || layout === "parallel"}>
-        {palette && (
+        {palette && depthLayers && (
           <HouseFlythrough
             model={model}
             path={path}
             photos={photosById}
             wallArt={wallArt}
             palette={palette}
+            depthLayers={depthLayers}
             layout={layout}
             strength={strength}
             pairWidth={pairWidth}
@@ -175,7 +205,7 @@ export default function FlythroughPage() {
             onXr={onXr}
           />
         )}
-        {!palette && <div className="center-msg"><span className="spinner" /></div>}
+        {!(palette && depthLayers) && <div className="center-msg"><span className="spinner" /></div>}
         <div className="stage-title">
           {roomLabel ?? ""}
           {fly.photoId && <span className="badge ok" style={{ marginLeft: 8 }}>listing photo view</span>}
@@ -244,6 +274,7 @@ export default function FlythroughPage() {
             {model.rooms.filter((r) => !r.parent).length} rooms on {model.floors.length} floor{model.floors.length === 1 ? "" : "s"}, built from the floor plan. Walls
             are painted with the listing photos, projected back from where each was taken, so every stop on the route shows a real photo from its own viewpoint.{" "}
             <strong>{placed}</strong> of {assigned} sorted photos have a camera position and are used
+            {depthLayers && depthLayers.length > 0 && <> ({depthLayers.length} with depth, so their furniture stands out in 3D near their viewpoint)</>}
             {placed < assigned && (
               <> (run <Link href="/analyze">Place cameras</Link> for the rest)</>
             )}

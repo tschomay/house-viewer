@@ -7,6 +7,14 @@ import { sampleAt, SIDES, WALL_H, type FlightPath, type HouseModel, type HouseRo
 import type { ListingImage, WallArt } from "@/lib/types";
 import type { StereoLayout } from "./StereoViewer";
 
+/** A photo lifted to 3D from its depth map (camera space: camera at origin looking −Z), see buildLayer. */
+export interface DepthLayer {
+  photoId: string;
+  positions: Float32Array;
+  uvs: Float32Array;
+  indices: Uint32Array;
+}
+
 export interface FlyState {
   t: number;
   roomId: string | null;
@@ -20,6 +28,8 @@ interface Props {
   wallArt: Record<string, WallArt>;
   /** Per-room colours sampled from the photos (see roomPalette). */
   palette: Record<string, RoomColors>;
+  /** Depth meshes for photos that have depth maps: shown near their viewpoints, so furniture stands out in 3D. */
+  depthLayers: DepthLayer[];
   layout: StereoLayout;
   strength: number;
   pairWidth: number;
@@ -60,10 +70,12 @@ export default function HouseFlythrough(props: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const guideRef = useRef<HTMLDivElement>(null);
   const live = useRef(props);
+  // Playback position and last handled seek, kept across scene rebuilds (new wall art rebuilds the scene).
+  const clockRef = useRef({ t: 0, seekN: -1 });
   useEffect(() => {
     live.current = props;
   });
-  const { model, path, photos, wallArt, palette } = props;
+  const { model, path, photos, wallArt, palette, depthLayers } = props;
 
   useEffect(() => {
     const host = hostRef.current!;
@@ -149,25 +161,43 @@ export default function HouseFlythrough(props: Props) {
       disposables.push(mat);
     }
 
-    // Stairs: a run of steps inside their box.
-    const stepMat = new THREE.MeshLambertMaterial({ color: "#b58d63" });
-    disposables.push(stepMat);
-    for (const s of model.stairs) {
-      const n = Math.max(8, Math.round((s.y1 - s.y0) / 0.19));
-      const len = Math.hypot(s.high[0] - s.low[0], s.high[1] - s.low[1]);
-      const width = s.axis === "x" ? s.box.z1 - s.box.z0 : s.box.x1 - s.box.x0;
-      const stepGeo = new THREE.BoxGeometry(Math.min(1.1, width), (s.y1 - s.y0) / n, len / n);
-      disposables.push(stepGeo);
-      const dir = new THREE.Vector2(s.high[0] - s.low[0], s.high[1] - s.low[1]).normalize();
-      const lowerFloor = model.rooms.find((r) => r.id === s.lowerRoomId)!.floor;
-      for (let i = 0; i < n; i++) {
-        const step = new THREE.Mesh(stepGeo, stepMat);
-        const f = (i + 0.5) / n;
-        step.position.set(s.low[0] + dir.x * len * f, s.y0 + ((i + 0.5) * (s.y1 - s.y0)) / n, s.low[1] + dir.y * len * f);
-        step.rotation.y = Math.atan2(dir.x, dir.y);
-        floorGroups[lowerFloor].add(step);
-      }
+    // Stairs get no geometry of their own: the photos already show the real ones, and drawn
+    // steps fought with them. The flight path still climbs them (see buildFlightPath).
+
+    // Depth meshes: near a photo's viewpoint, its own depth mesh takes over from the flat
+    // projection. From the viewpoint both show the same pixels; stepping or looking around
+    // (and in stereo) the furniture then has real depth instead of being painted on the walls.
+    const shotById = new Map(model.rooms.flatMap((r) => r.photos.map((p) => [p.photoId, { p, floor: r.floor }] as const)));
+    const depthMeshes: { mesh: THREE.Mesh; mat: THREE.MeshBasicMaterial; x: number; z: number; yaw: number }[] = [];
+    for (const l of depthLayers) {
+      const shot = shotById.get(l.photoId);
+      if (!shot || !photos.has(l.photoId)) continue;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute("position", new THREE.BufferAttribute(l.positions, 3));
+      geo.setAttribute("uv", new THREE.BufferAttribute(l.uvs, 2));
+      geo.setIndex(new THREE.BufferAttribute(l.indices, 1));
+      // Dithered transparency: no sorting trouble while it fades in and out.
+      const mat = new THREE.MeshBasicMaterial({ map: photoTexture(l.photoId), side: THREE.DoubleSide, alphaHash: true, opacity: 0 });
+      const mesh = new THREE.Mesh(geo, mat);
+      mesh.position.set(shot.p.x, shot.p.y, shot.p.z);
+      mesh.rotation.y = shot.p.yaw;
+      mesh.visible = false;
+      floorGroups[shot.floor].add(mesh);
+      depthMeshes.push({ mesh, mat, x: shot.p.x, z: shot.p.z, yaw: shot.p.yaw });
+      disposables.push(geo, mat);
     }
+    const fwd = new THREE.Vector3();
+    const fadeDepth = (cam: THREE.Vector3) => {
+      camera.getWorldDirection(fwd);
+      const camYaw = Math.atan2(-fwd.x, -fwd.z);
+      for (const d of depthMeshes) {
+        const dist = Math.hypot(cam.x - d.x, cam.z - d.z);
+        const turn = Math.abs(Math.atan2(Math.sin(camYaw - d.yaw), Math.cos(camYaw - d.yaw)));
+        const a = (1 - THREE.MathUtils.smoothstep(dist, 0.35, 1.5)) * (1 - THREE.MathUtils.smoothstep(turn, 0.9, 1.6));
+        d.mat.opacity = a;
+        d.mesh.visible = a > 0.02;
+      }
+    };
 
     // Camera rig: the path moves the rig; look-around (drag / tilt / headset) turns the camera inside it.
     const rig = new THREE.Group();
@@ -261,8 +291,8 @@ export default function HouseFlythrough(props: Props) {
         .catch(() => live.current.onXr?.(null));
     } else live.current.onXr?.(null);
 
-    let t = 0;
-    let lastSeek = -1;
+    let t = clockRef.current.t;
+    let lastSeek = clockRef.current.seekN;
     let lastRecenter = live.current.recenter;
     let lastReport = 0;
     let ended = false;
@@ -274,7 +304,7 @@ export default function HouseFlythrough(props: Props) {
       frame++;
       const p = live.current;
       if (p.seek.n !== lastSeek) {
-        lastSeek = p.seek.n;
+        lastSeek = clockRef.current.seekN = p.seek.n;
         t = Math.max(0, Math.min(path.duration, p.seek.t));
         ended = false;
       }
@@ -292,6 +322,7 @@ export default function HouseFlythrough(props: Props) {
           p.onEnd();
         }
       }
+      clockRef.current.t = t;
       const s = sampleAt(path, t);
       const k = 1 - Math.exp(-dt * 12);
       look.yaw += (target.yaw - look.yaw) * k;
@@ -314,6 +345,7 @@ export default function HouseFlythrough(props: Props) {
       camera.updateMatrixWorld(true);
       camera.getWorldPosition(camWorld);
       for (const u of updaters) u(camWorld);
+      fadeDepth(camWorld);
 
       if (performance.now() - lastReport > 120) {
         lastReport = performance.now();
@@ -392,7 +424,7 @@ export default function HouseFlythrough(props: Props) {
       renderer.forceContextLoss();
       el.remove();
     };
-  }, [model, path, photos, wallArt, palette]);
+  }, [model, path, photos, wallArt, palette, depthLayers]);
 
   return (
     <div ref={hostRef} style={{ position: "relative", width: "100%", height: "100%", overflow: "hidden" }}>
@@ -541,7 +573,7 @@ function roomMesh(
       float hash(vec2 p) { return fract(sin(dot(p, vec2(127.1, 311.7))) * 43758.5453); }
 
       // One photo's contribution: its colour × weight (rgb) and the weight (a).
-      vec4 project(sampler2D t, mat4 m, vec3 p) {
+      vec4 project(sampler2D t, mat4 m, vec3 p, inout float maxW) {
         vec4 c = m * vec4(vW, 1.0);
         if (c.w <= 0.0) return vec4(0.0);
         vec2 n = c.xy / c.w;
@@ -549,10 +581,13 @@ function roomMesh(
         float edge = smoothstep(0.0, 0.1, 1.0 - abs(n.x)) * smoothstep(0.0, 0.1, 1.0 - abs(n.y));
         // Prefer photos taken near where you are, looking the way you look at this spot.
         float d = distance(camPos, p);
-        float near = 0.4 + 0.6 * exp(-d * d / 2.5);
+        float near = 0.25 + 0.75 * exp(-d * d / 2.5);
         float ang = max(0.0, dot(normalize(vW - p), normalize(vW - camPos)));
         float w = edge * near * (0.3 + 0.7 * ang * ang * ang);
-        return vec4(texture2D(t, n * 0.5 + 0.5).rgb * w, w);
+        maxW = max(maxW, w);
+        // Sharpened for the blend, so the best-placed photo wins instead of several ghosting together.
+        float s = w * w * w * w + 1e-6;
+        return vec4(texture2D(t, n * 0.5 + 0.5).rgb * s, s) * step(1e-4, w);
       }
 
       void main() {
@@ -571,9 +606,10 @@ function roomMesh(
           base = ceilColor;
         }
         vec4 acc = vec4(0.0);
-        ${Array.from({ length: MAX_PHOTOS }, (_, i) => `if (count > ${i}) acc += project(ph${i}, projM[${i}], projP[${i}]);`).join("\n        ")}
+        float maxW = 0.0;
+        ${Array.from({ length: MAX_PHOTOS }, (_, i) => `if (count > ${i}) acc += project(ph${i}, projM[${i}], projP[${i}], maxW);`).join("\n        ")}
         vec3 col = base;
-        if (acc.a > 0.0) col = mix(base, acc.rgb / acc.a, clamp(acc.a * 3.0, 0.0, 1.0));
+        if (acc.a > 0.0) col = mix(base, acc.rgb / acc.a, clamp(maxW * 3.0, 0.0, 1.0));
         gl_FragColor = vec4(col, 1.0);
         #include <colorspace_fragment>
       }`,
