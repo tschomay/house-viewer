@@ -12,6 +12,8 @@ export const POST = gated(async (req, creds) => {
     photos?: (SortPhotoInput & { dataUrl: string })[];
     floorPlan?: string;
     context?: string[];
+    /** Use the Pro model instead of Flash. */
+    careful?: boolean;
   };
   if (!body.graph?.rooms?.length || !Array.isArray(body.photos) || !body.photos.length) {
     return Response.json({ error: "graph and photos are required" }, { status: 400 });
@@ -21,7 +23,7 @@ export const POST = gated(async (req, creds) => {
   }
   try {
     const context = Array.isArray(body.context) ? body.context.filter((c) => typeof c === "string").slice(0, 200) : [];
-    const { raw, parsed, usage } = await sortPhotos(creds.geminiKey, body.graph, body.photos, body.floorPlan, context);
+    const { raw, parsed, usage } = await sortPhotos(creds.geminiKey, body.graph, body.photos, body.floorPlan, context, body.careful === true);
     return Response.json({ raw, ...normalizeSort(parsed, body.photos, body.graph), usage });
   } catch (e) {
     const status = e instanceof MissingKeyError ? 503 : 502;

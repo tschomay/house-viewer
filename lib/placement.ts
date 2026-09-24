@@ -2,9 +2,8 @@
  * Second Gemini pass: place a room's cameras on the floor plan, judging all of
  * the room's photos together.
  *
- * The first pass (match-photo) sees one photo at a time and has to pick the
- * room as well, so its camera guesses are rough, and a manual room change
- * throws them away. With the room settled, one call per room can compare the
+ * The sort pass judges the whole listing at once and gives no camera poses,
+ * and a manual room change throws away whatever pose a photo had. With the room settled, one call per room can compare the
  * photos with each other (photo 2 shows the doorway photo 1 was taken from),
  * which is what the 3D merge needs. It is also cheaper than re-matching: one
  * call per room, not one per photo.

@@ -6,6 +6,11 @@ import { SORT_SCHEMA, sortPrompt, type SortPhotoInput } from "./sorting";
 import type { Room, RoomGraph } from "./types";
 
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
+/**
+ * The one-call sort runs on Flash by default: on the demo house it matched Pro
+ * (9/9) at ~1/15 of the cost. "Careful" re-checks use GEMINI_MODEL (Pro).
+ */
+export const SORT_FAST_MODEL = process.env.GEMINI_SORT_MODEL || "gemini-3-flash-preview";
 
 export class MissingKeyError extends Error {}
 
@@ -82,58 +87,6 @@ export async function extractRoomGraph(apiKey: string | null, floorPlanDataUrl: 
   return { raw, parsed: JSON.parse(raw), usage: geminiUsage(GEMINI_MODEL, res.usageMetadata, process.env) };
 }
 
-const MATCH_SCHEMA = {
-  type: "object",
-  properties: {
-    roomId: { type: ["string", "null"], description: "id from the room list, or null if you cannot tell / not an interior room photo" },
-    confidence: { type: "number", description: "0..1 — how sure you are about roomId" },
-    isExterior: { type: "boolean", description: "true for exterior, yard, street, aerial or community-amenity photos" },
-    headingDeg: {
-      type: ["number", "null"],
-      description: "compass direction the camera faces ON THE FLOOR PLAN image: 0 = towards the top of the plan, 90 = right, 180 = bottom, 270 = left. null if unknown",
-    },
-    cameraPosition: {
-      type: ["object", "null"],
-      description: "approximate camera position on the floor plan image, normalized 0..1 from top-left; null if unknown",
-      properties: { x: { type: "number" }, y: { type: "number" } },
-    },
-    reasoning: { type: "string", description: "one or two sentences: which visual cues (fixtures, windows, doorways) you used" },
-  },
-  required: ["roomId", "confidence", "isExterior", "headingDeg", "reasoning"],
-};
-
-export async function matchPhoto(
-  apiKey: string | null,
-  photoDataUrl: string,
-  graph: RoomGraph,
-  floorPlanDataUrl?: string,
-): Promise<{ raw: string; parsed: unknown; usage: GeminiUsage }> {
-  const roomList = graph.rooms
-    .map((r) => `- ${r.id}: ${r.label} (${r.type}), centre (${r.centroid.x.toFixed(2)}, ${r.centroid.y.toFixed(2)}), connects to [${r.neighbors.join(", ")}]`)
-    .join("\n");
-  const parts = [
-    { text: "PHOTO:" },
-    { inlineData: splitDataUrl(photoDataUrl) },
-    ...(floorPlanDataUrl ? [{ text: "FLOOR PLAN (for orientation):" }, { inlineData: splitDataUrl(floorPlanDataUrl) }] : []),
-    {
-      text: `This is a real-estate listing photo of a home. Rooms on the floor plan:
-${roomList}
-
-Which room was this photo most likely taken in? Use fixtures (sinks, tubs, appliances, beds), window and door positions, and the room's shape relative to the floor plan.
-Also estimate which way the camera faces on the floor plan and roughly where it stands (photographers usually shoot from a doorway or corner).
-Be honest with confidence: several similar bedrooms/bathrooms should get lower confidence unless something distinguishes them.
-Return only JSON matching the schema.`,
-    },
-  ];
-  const res = await client(apiKey).models.generateContent({
-    model: GEMINI_MODEL,
-    contents: [{ role: "user", parts }],
-    config: { responseMimeType: "application/json", responseJsonSchema: MATCH_SCHEMA, temperature: 0.2 },
-  });
-  const raw = res.text ?? "";
-  return { raw, parsed: JSON.parse(raw), usage: geminiUsage(GEMINI_MODEL, res.usageMetadata, process.env) };
-}
-
 /**
  * Place several photos of one (already known) room on the floor plan in one
  * call. `floorPlanDataUrl` should have the room outlined (the prompt says red).
@@ -160,9 +113,14 @@ export async function placePhotos(
  * with thought summaries keeps bytes flowing, so proxies with an idle timeout
  * don't cut the call.
  */
-async function streamJson(apiKey: string | null, parts: Part[], schema: object): Promise<{ raw: string; parsed: unknown; usage: GeminiUsage }> {
+async function streamJson(
+  apiKey: string | null,
+  parts: Part[],
+  schema: object,
+  model = GEMINI_MODEL,
+): Promise<{ raw: string; parsed: unknown; usage: GeminiUsage }> {
   const stream = await client(apiKey).models.generateContentStream({
-    model: GEMINI_MODEL,
+    model,
     contents: [{ role: "user", parts }],
     config: {
       responseMimeType: "application/json",
@@ -177,7 +135,7 @@ async function streamJson(apiKey: string | null, parts: Part[], schema: object):
     for (const part of chunk.candidates?.[0]?.content?.parts ?? []) if (!part.thought && part.text) raw += part.text;
     usageMetadata = chunk.usageMetadata ?? usageMetadata;
   }
-  return { raw, parsed: JSON.parse(raw), usage: geminiUsage(GEMINI_MODEL, usageMetadata, process.env) };
+  return { raw, parsed: JSON.parse(raw), usage: geminiUsage(model, usageMetadata, process.env) };
 }
 
 /**
@@ -191,6 +149,7 @@ export async function sortPhotos(
   photos: (SortPhotoInput & { dataUrl: string })[],
   floorPlanDataUrl: string | undefined,
   context: string[],
+  careful = false,
 ): Promise<{ raw: string; parsed: unknown; usage: GeminiUsage }> {
   const parts: Part[] = [
     ...(floorPlanDataUrl
@@ -205,5 +164,5 @@ export async function sortPhotos(
     ]),
     { text: sortPrompt(graph, photos, context) },
   ];
-  return streamJson(apiKey, parts, SORT_SCHEMA);
+  return streamJson(apiKey, parts, SORT_SCHEMA, careful ? GEMINI_MODEL : SORT_FAST_MODEL);
 }
