@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { repairCentroids } from "@/lib/room-graph";
 import type { ListingImage, RoomGraph } from "@/lib/types";
 
 interface Props {
@@ -68,7 +69,11 @@ export default function FloorPlanGraph({ graph, floorPlan, photoCounts, current,
       disposables.push(tex, mat, plane.geometry);
     }
 
-    const byId = new Map(graph.rooms.map((r) => [r.id, r]));
+    // Projects saved before centres were checked can hold centres outside their
+    // rooms; draw from a repaired copy (the saved graph is left alone so cache
+    // keys, and the Gemini results behind them, stay valid).
+    const rooms = repairCentroids(graph.rooms.map((r) => ({ ...r })));
+    const byId = new Map(rooms.map((r) => [r.id, r]));
     const r0 = 0.022 * Math.max(W, H);
 
     // Room outlines
@@ -100,7 +105,7 @@ export default function FloorPlanGraph({ graph, floorPlan, photoCounts, current,
     const nodeGeo = new THREE.CircleGeometry(r0, 32);
     const ringGeo = new THREE.RingGeometry(r0 * 1.25, r0 * 1.55, 40);
     disposables.push(nodeGeo, ringGeo);
-    const nodes = graph.rooms.map((room) => {
+    const nodes = rooms.map((room) => {
       const mat = new THREE.MeshBasicMaterial({ color: COLORS.empty });
       const mesh = new THREE.Mesh(nodeGeo, mat);
       mesh.position.copy(toWorld(room.centroid));

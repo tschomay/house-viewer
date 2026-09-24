@@ -22,7 +22,7 @@ export interface Placement {
 }
 
 /** Photos per call. Keeps request bodies under Vercel's 4.5 MB limit and the prompt focused. */
-export const MAX_PHOTOS_PER_PLACEMENT = 6;
+export const MAX_PHOTOS_PER_PLACEMENT = 4;
 
 export const PLACEMENT_SCHEMA = {
   type: "object",

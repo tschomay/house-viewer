@@ -192,7 +192,8 @@ export default function AnalyzePage() {
             if (!fresh) recordUsage("place", null);
             for (const placement of placements) dispatch({ type: "placement", roomId: room.id, placement });
           } catch (e) {
-            setPlaceErrors((errs) => [...errs, `${room.label}: ${(e as Error).message}`]);
+            const err = e as Error & { status?: number };
+            setPlaceErrors((errs) => [...errs, `${room.label}: ${err.status === 504 ? "timed out" : err.message}`]);
           }
           setPlaceBusy({ label: "Placing cameras", done: ++done, total: jobs.length });
         }
@@ -467,7 +468,12 @@ export default function AnalyzePage() {
                   </div>
                 )}
                 {placeBusy && <div className="progress"><div style={{ width: `${(100 * placeBusy.done) / Math.max(1, placeBusy.total)}%` }} /></div>}
-                {placeErrors.length > 0 && <div className="notice bad small" style={{ marginTop: 8 }}>{placeErrors.join(" · ")}</div>}
+                {placeErrors.length > 0 && (
+                  <div className="notice bad small" style={{ marginTop: 8 }}>
+                    {placeErrors.join(" · ")}. Tap <strong>Re-place cameras</strong> to retry: rooms that finished come from cache, so
+                    only the failed ones are re-sent.
+                  </div>
+                )}
               </div>
             )}
             {needsReview.length > 0 && (

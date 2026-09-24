@@ -10,6 +10,7 @@ import BookmarkletCard from "@/components/BookmarkletCard";
 import { bookmarkletImportResult, parseBookmarkletHash } from "@/lib/bookmarklet";
 import { importRemoteImage, toListingImage } from "@/lib/client/images";
 import { buildDemo, DEMO_LISTING_LABEL } from "@/lib/client/demo";
+import { exportProject, readProjectFile } from "@/lib/client/project-file";
 import type { ImportResult, ListingImage } from "@/lib/types";
 
 async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R>): Promise<PromiseSettledResult<R>[]> {
@@ -269,9 +270,14 @@ export default function IntakePage() {
             <h2>
               {photos.length} photo{photos.length === 1 ? "" : "s"} · {floorPlan ? "floor plan ✓" : "no floor plan yet"}
             </h2>
-            <button className="btn small ghost" onClick={() => confirm("Remove all images and results?") && dispatch({ type: "reset" })}>
-              Start over
-            </button>
+            <div className="row" style={{ gap: 6 }}>
+              <button className="btn small ghost" onClick={() => exportProject(project)} title="Save photos, rooms and camera placements as one file">
+                Export
+              </button>
+              <button className="btn small ghost" onClick={() => confirm("Remove all images and results?") && dispatch({ type: "reset" })}>
+                Start over
+              </button>
+            </div>
           </div>
           <div className="gallery">
             {[...project.images]
@@ -309,6 +315,31 @@ export default function IntakePage() {
           Continue →
         </Link>
       </div>
+      <p className="small muted" style={{ marginTop: 16 }}>
+        Have a project file from <strong>Export</strong>?{" "}
+        <label className="linklike" style={{ cursor: "pointer" }}>
+          Import it
+          <input
+            type="file"
+            accept="application/json,.json"
+            hidden
+            onChange={async (e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (!file) return;
+              try {
+                const imported = await readProjectFile(file);
+                if (project.images.length && !confirm("Replace the current project with the imported one?")) return;
+                dispatch({ type: "load", project: imported });
+                setAddError(null);
+              } catch (err) {
+                setAddError((err as Error).message);
+              }
+            }}
+          />
+        </label>
+        {" "}(photos, rooms and camera placements; depth is recomputed).
+      </p>
       {!floorPlan && photos.length > 0 && (
         <p className="small muted">Without a floor plan you can still view each photo in 3D, but not walk between rooms.</p>
       )}
