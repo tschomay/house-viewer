@@ -34,6 +34,22 @@ The original brief (goals, pipeline, build order, open questions) is summarized 
 - **Width slider** (side-by-side layouts): squeezes the stereo pair towards the middle of the screen. A landscape phone is wider than the viewer's eyes are apart, which made the pair hard to fuse. Saved per device, as are Depth and layout (`lib/client/prefs.ts`).
 - **Tap for directions**: a tap (not a drag) on the 3D view shows arrow buttons to each connected room, placed by where the room lies relative to the way the current photo faces (↑ ahead, ↙ behind-left…), plus Depth/Width sliders. Tap an arrow to walk there. Auto-hides after 8 s. Checked in a landscape phone-sized browser: arrows point correctly from the demo living room, the Width slider works, and the Kitchen arrow navigates.
 
+## Real-house test data and findings (2026-09-24)
+
+**Fixtures:** the user's real house (36316 S Park Dr, Avon OH) is in the **private** repo `tschomay/house-viewer-fixtures`: a project export (40 photos, 20-room two-storey plan, sort + placements) and its on-device depth maps. Never copy them into this public repo. Attach it in a session with `add_repo`, then run:
+`ACCESS_PASSWORD=... node scripts/e2e-real-tour.mjs <outDir> ../house-viewer-fixtures/projects/avon-36316-s-park-dr.json ../house-viewer-fixtures/depth/avon-36316-s-park-dr.browser.json`
+It imports, adds depth in ~3 s, tours the multi-photo rooms, and saves screenshots plus `[room-model]` lines.
+
+**What the first real run showed:**
+- Every multi-photo room merges (Family 5, Kitchen 5, Living 4, Library/Foyer/MBath 3, Dining 2), but only because Gemini's placements anchor them. **The plan-outline fit was rejected for every photo.** Calibrated photos put walls 5–8 m away in rooms 3–5 m across. Causes:
+  - the 75° lens assumption, where real-estate photos are ~90–100° across (going wider helps but doesn't fix it);
+  - open-plan views (kitchen / nook / family) that break "farthest point per column = wall";
+  - Depth Anything on real photos not being the clean affine inverse depth the floor fit assumes.
+
+  The acceptance thresholds did their job: no photo was moved to a wrong pose.
+- **Looking around a merged room smears badly on real photos:** neighbouring photos' depth meshes, seen from a few metres off their own viewpoint with imperfect poses, stretch into streaks. At rest each photo looks fine.
+- Proposal, not built yet (waiting on the user): in merged rooms, turning past the current photo's edge **steps to the neighbouring photo** that faces that way, instead of rendering smeared neighbours. Each photo is then only ever seen from its own viewpoint, and poses only need to be right to within ~30° (which Gemini's placements are).
+
 ## More tour/map controls (user requests, 2026-09-24)
 
 - **Navigation arrows in 3D**: the tap-to-show directions are now Street View-style chevrons drawn on the floor in the scene, with a floating room label, so they appear in depth in the stereo pair. Tapping one in either eye's image walks there: raycast per eye viewport; three.js's StereoCamera doesn't update `projectionMatrixInverse`, so it's refreshed before each raycast. Rooms beside or behind you are pinned to the lower edge of the view, still pointing their true way. Checked in a landscape viewport: tapping the Kitchen arrow navigates. HTML buttons remain only for rooms with no photos.
