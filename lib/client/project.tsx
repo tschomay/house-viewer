@@ -2,6 +2,7 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
 import type { DepthMap, ImportResult, ListingImage, PhotoMatch, RoomGraph } from "../types";
+import { applyPlacement, type Placement } from "../placement";
 import { idbGet, idbSet } from "./idb";
 import { apiFetch, onCredsChange } from "./access";
 
@@ -41,6 +42,7 @@ type Action =
   | { type: "setKind"; id: string; kind: ListingImage["kind"] }
   | { type: "graph"; graph: RoomGraph | null; raw: string | null; source: Project["graphSource"] }
   | { type: "match"; match: PhotoMatch; raw?: string }
+  | { type: "placement"; roomId: string; placement: Placement }
   | { type: "depth"; depth: DepthMap }
   | { type: "replace"; project: Partial<Project> };
 
@@ -91,6 +93,12 @@ function reducer(state: Project, action: Action): Project {
         matches: { ...state.matches, [action.match.photoId]: action.match },
         matchRaw: action.raw !== undefined ? { ...state.matchRaw, [action.match.photoId]: action.raw } : state.matchRaw,
       };
+    case "placement": {
+      const m = state.matches[action.placement.photoId];
+      // Skip if the photo was moved to another room while the call was running.
+      if (!m || m.roomId !== action.roomId) return state;
+      return { ...state, matches: { ...state.matches, [m.photoId]: applyPlacement(m, action.placement) } };
+    }
     case "depth":
       return { ...state, depth: { ...state.depth, [action.depth.photoId]: action.depth } };
     case "replace":

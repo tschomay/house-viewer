@@ -53,6 +53,12 @@ export interface PhotoMatch {
   status: MatchStatus;
   /** True when the user reassigned this photo by hand. */
   manual?: boolean;
+  /** Camera heading/position came from the per-room placement pass (all of a room's photos judged together). */
+  placed?: boolean;
+  /** Placement pass: what Gemini used to place the camera. */
+  placementNote?: string;
+  /** Placement pass: Gemini thinks this photo shows a different room. */
+  suggestedRoomId?: string | null;
 }
 
 export interface DepthMap {

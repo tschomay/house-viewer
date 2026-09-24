@@ -9,10 +9,14 @@ Listing (URL / address / manual upload)
    │                                 │
    ├─ each photo ──▶ Gemini ─────────┴─▶ room match + camera heading/position on the plan
    │
+   ├─ each room's photos ──▶ Gemini (one call per room) ──▶ joint camera placement
+   │                         (after you've fixed the room assignments)
+   │
    ├─ each photo ──▶ Depth Anything V2 ──▶ relative depth map
    │                (on-device, or Replicate)
    │
-   └─ per room: depth → 3D mesh; 2+ photos → placed by plan pose, refined by bounded ICP
+   └─ per room: depth → metric (floor fit) → 3D mesh; 2+ photos → plan pose,
+                snapped to the plan's room outline, then a small ICP nudge
                      │
                      ▼
         Three.js: floor-plan node graph ⇄ stereo room view (cross-eye / parallel / wiggle / flat)
@@ -50,7 +54,7 @@ Copy `.env.example` → `.env.local` (or set these in Vercel → Project → Set
 
 ### Access gate (why the public deployment won't burn your credits)
 
-Every server route that costs money or fetches arbitrary URLs (`/api/room-graph`, `/api/match-photo`, `/api/depth`, `/api/import`, `/api/proxy-image`) needs one of:
+Every server route that costs money or fetches arbitrary URLs (`/api/room-graph`, `/api/match-photo`, `/api/place-photos`, `/api/depth`, `/api/import`, `/api/proxy-image`) needs one of:
 
 1. **The access password** (`x-access-password` header, entered on the Listing page). This unlocks the server's keys.
 2. **The visitor's own Gemini key** (`x-gemini-key`). The server checks it with Google once (then caches the result for 30 minutes) and uses it for that visitor only. A Replicate token can come with it.
@@ -64,8 +68,9 @@ With neither, those routes return 401. In `next dev` with no `ACCESS_PASSWORD` s
 | Auto-import | `lib/importer.ts`, `lib/listing-parse.ts` | Fetches the page server-side and pulls images from JSON-LD, `og:image`, `<img>` and inline JSON blobs. Keeps the largest size of each photo and flags floor plans by caption or URL. An address goes through Redfin's autocomplete. Blocks and CAPTCHAs return a readable reason, and the UI falls through to manual upload. SSRF-guarded (`lib/safe-fetch.ts`). |
 | Room graph | `lib/gemini.ts`, `lib/room-graph.ts` | Structured JSON output with a schema. Normalization dedupes ids, clamps coordinates, drops unknown neighbours, and makes adjacency symmetric. The raw output is logged and shown on the Analyze page. |
 | Photo matching | same | One request per photo (fits Vercel's 4.5 MB body limit). Returns a room, confidence, camera heading and position on the plan, and its reasoning. Matches below 55% go to a **Needs a look** tray. You can reassign any photo by hand, and manual picks survive re-runs. |
+| Camera placement (2nd pass) | `lib/placement.ts`, `app/api/place-photos/route.ts` | Run after the room assignments look right. **One call per room**, with all of its photos (up to 6 per call) and the floor plan with that room outlined in red. Gemini places every camera at once, so the placements agree with each other. It also flags photos that don't belong in the room, with a one-tap move. Keeps room choices and manual flags, and restores camera poses for photos moved by hand. Streams with thought summaries so long calls aren't cut by idle timeouts. Cached per room + photo set. |
 | Depth | `lib/depth.worker.ts`, `lib/client/depth.ts`, `lib/depth.ts` | Default is **on-device**: Depth Anything V2 Small via transformers.js (WebGPU, falling back to WASM). It's private and free, with a ~27 MB model download that's cached afterwards. Optional: Replicate (Large). Last resort: a "box room" heuristic. |
-| Reconstruction | `lib/geometry.ts`, `lib/merge.ts`, `lib/client/room-model.ts` | Relative inverse depth is mapped to metres, with `far` taken from the plan's printed room size. Each photo becomes a depth-displaced mesh, with triangles across depth edges dropped. For 2+ photos, each is placed at its Gemini plan pose (plan units → metres via room bounds and printed dimensions). A **rigid ICP bounded to ±20° / 0.8 m** can nudge it, and only when overlap clearly improves. Photos without a usable pose fall back to one-at-a-time viewing. |
+| Reconstruction | `lib/geometry.ts`, `lib/layout-fit.ts`, `lib/merge.ts`, `lib/client/room-model.ts` | **Metric depth from the floor:** listing photos are shot level from about 1.5 m, so a floor pixel's true distance follows from its image row. A RANSAC fit of the model's affine inverse depth to that gives metres. Countertops and beds fit the same kind of line; they're rejected because they'd put real pixels below the floor, or make the room bigger than the plan says. When there's too little floor, it falls back to a range from the plan's printed room size. Each photo becomes a depth-displaced mesh, with triangles across depth edges dropped. **For 2+ photos**, each starts at its Gemini plan pose. The farthest point in each image column is taken as wall, and that profile is ICP-fitted to the room's outline (plus the rooms it opens onto) from the plan, trying yaw seeds ±40°. It's accepted only on a strong fit (≥60% of the profile on the outline, ≥80% if depth isn't calibrated). Then a photo-to-photo ICP (±6° / 0.3 m) can nudge it. Photos without a usable pose fall back to one-at-a-time viewing. |
 | Stereo view | `components/StereoViewer.tsx` | GPU DIBR: the mesh is rendered from two off-axis eye cameras (`THREE.StereoCamera`), converging on the median scene depth. Cross-eye swaps the eyes, and fusion dots help line up the pair. A dimmed copy of the photo far behind fills disocclusion holes. Also: drag to look around, gyro or mouse parallax, and a dolly forward on exit. |
 | Navigation | `components/FloorPlanGraph.tsx`, `app/tour/page.tsx` | Three.js orthographic scene over the floor plan, with room outlines, edges, and tappable nodes. Adjacent-room chips, crossfade transitions, and neighbours pre-built in the background. |
 | Caching | `lib/client/idb.ts` | IndexedDB, keyed by image hash (plus graph hash for matches). Reloads and re-runs don't re-spend API calls, and the whole project persists across reloads. |
@@ -73,6 +78,8 @@ With neither, those routes return 401. In `next dev` with no `ACCESS_PASSWORD` s
 ## Decisions made along the way
 
 - **Depth runs in the browser by default** rather than on Replicate. It needs no key, has no per-photo cost or cold starts, and photos never leave the device for this step. Replicate (Large model) is still one dropdown away when a key is present.
+- **Photos are aligned to the plan's walls, not just to each other** (2026-09-24). Two photos of a room overlap only partly, so photo-to-photo ICP had little to grip, and with model depth it drifted up to ~17° from exact poses. Every photo does see the floor and the room's walls, both known from the plan. Measured on the demo house with real on-device depth, starting 25° / 0.7 m off: old pipeline 23–30° off, new 1–3° / ~0.15 m for photos with visible floor. Photos with no usable floor are left at Gemini's pose rather than made worse.
+- **No generative gap-filling.** Having an image model invent the unseen parts of a room would make the tour look seamless, but for a buyer it would show walls, windows and fixtures that aren't there. It would also cost per view (and per eye, to stay consistent in stereo). Holes stay visibly dim instead.
 - **Merging trusts the floor plan first, ICP second.** On the demo house, unconstrained ICP (with scale) made alignment *worse*: views of a room overlap only partially, so shrinking a cloud raised its "inlier" score. Rigid, bounded ICP that must beat the plan pose fixed it. With exact depth, the poses match ground truth.
 - **A synthetic demo house with ground truth** doubles as a test fixture and as a no-key first-run experience.
 

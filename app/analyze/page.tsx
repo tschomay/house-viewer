@@ -11,6 +11,8 @@ import { beginRun, recordUsage } from "@/lib/client/cost";
 import type { GeminiUsage } from "@/lib/cost";
 import { estimateDepth, onModelProgress, type DepthEngine } from "@/lib/client/depth";
 import { groupByRoom } from "@/lib/room-graph";
+import { placementBatches, type Placement } from "@/lib/placement";
+import { redrawImage } from "@/lib/client/images";
 import { MATCH_CONFIDENCE_THRESHOLD, type PhotoMatch, type RoomGraph } from "@/lib/types";
 
 const FloorPlanGraph = dynamic(() => import("@/components/FloorPlanGraph"), { ssr: false });
@@ -22,7 +24,7 @@ type Busy = { label: string; done: number; total: number } | null;
 async function postJson<T>(url: string, body: unknown): Promise<T> {
   const res = await apiFetch(url, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.error ?? `HTTP ${res.status}`);
+  if (!res.ok) throw Object.assign(new Error(json.error ?? `HTTP ${res.status}`), { status: res.status });
   return json as T;
 }
 
@@ -33,6 +35,8 @@ export default function AnalyzePage() {
   const [graphError, setGraphError] = useState<string | null>(null);
   const [matchBusy, setMatchBusy] = useState<Busy>(null);
   const [matchErrors, setMatchErrors] = useState<Record<string, string>>({});
+  const [placeBusy, setPlaceBusy] = useState<Busy>(null);
+  const [placeErrors, setPlaceErrors] = useState<string[]>([]);
   const [depthBusy, setDepthBusy] = useState<Busy>(null);
   const [depthErrors, setDepthErrors] = useState<Record<string, string>>({});
   const [modelDl, setModelDl] = useState<number | null>(null);
@@ -113,6 +117,53 @@ export default function AnalyzePage() {
     setMatchBusy(null);
   }
 
+  /** Second pass: one Gemini call per room places all of its cameras together, using the room assignments as given. */
+  async function runPlacement() {
+    if (!graph || !floorPlan) return;
+    const graphKey = hashString(JSON.stringify(graph));
+    const jobs = graph.rooms.flatMap((room) =>
+      placementBatches([...(groups[room.id] ?? [])].sort()).map((ids) => ({ room, ids })),
+    );
+    setPlaceErrors([]);
+    beginRun("place");
+    setPlaceBusy({ label: "Placing cameras", done: 0, total: jobs.length });
+    let done = 0;
+    const queue = [...jobs];
+    await Promise.all(
+      Array.from({ length: 2 }, async () => {
+        for (let job = queue.shift(); job; job = queue.shift()) {
+          const { room, ids } = job;
+          let fresh = false;
+          try {
+            const { placements } = await cached(`place:${graphKey}:${room.id}:${ids.join(",")}`, async () => {
+              // Smaller photos keep the request under the body limit; Gemini bills images per tile, not per pixel.
+              const [plan, ...shots] = await Promise.all([
+                redrawImage(floorPlan.dataUrl, 1600, room.bbox),
+                ...ids.map((id) => redrawImage(byId.get(id)!.dataUrl, 1024)),
+              ]);
+              const body = { roomId: room.id, graph, floorPlan: plan, photos: ids.map((id, i) => ({ id, dataUrl: shots[i] })) };
+              type Res = { raw: string; placements: Placement[]; usage?: GeminiUsage };
+              // One retry: a multi-photo call is long enough that a dropped upstream connection happens.
+              const res = await postJson<Res>("/api/place-photos", body).catch((e: Error & { status?: number }) =>
+                e.status == null || e.status >= 500 ? postJson<Res>("/api/place-photos", body) : Promise.reject(e),
+              );
+              fresh = true;
+              recordUsage("place", res.usage);
+              console.log("[place-photos]", room.id, res.raw);
+              return res;
+            });
+            if (!fresh) recordUsage("place", null);
+            for (const placement of placements) dispatch({ type: "placement", roomId: room.id, placement });
+          } catch (e) {
+            setPlaceErrors((errs) => [...errs, `${room.label}: ${(e as Error).message}`]);
+          }
+          setPlaceBusy({ label: "Placing cameras", done: ++done, total: jobs.length });
+        }
+      }),
+    );
+    setPlaceBusy(null);
+  }
+
   async function runDepth() {
     const todo = photos.filter((p) => project.depth[p.id]?.source !== engine && project.matches[p.id]?.status !== "exterior");
     setDepthErrors({});
@@ -166,6 +217,10 @@ export default function AnalyzePage() {
   const unreviewed = photos.filter((p) => !project.matches[p.id]);
   const needsReview = Object.values(project.matches).filter((m) => byId.has(m.photoId) && (m.status === "low-confidence" || m.status === "unmatched"));
   const depthCount = photos.filter((p) => project.depth[p.id]).length;
+  const roomsWithPhotos = (graph?.rooms ?? []).filter((r) => groups[r.id]?.length);
+  const inRooms = Object.values(project.matches).filter((m) => byId.has(m.photoId) && m.roomId);
+  const sortedCount = inRooms.length;
+  const placedCount = inRooms.filter((m) => m.placed).length;
   const photoCounts = useMemo(() => {
     const c: Record<string, number> = {};
     for (const [room, ids] of Object.entries(groups)) c[room] = ids.length;
@@ -202,6 +257,9 @@ export default function AnalyzePage() {
               <span className={`badge ${m.status === "matched" ? "ok" : m.status === "low-confidence" ? "warn" : m.status === "exterior" ? "" : "bad"}`}>
                 {m.manual ? "manual" : `${Math.round(m.confidence * 100)}%`}
               </span>
+              {m.placed && (
+                <span className="badge ok" title={m.placementNote || "Placed on the plan"}>placed</span>
+              )}
               {m.headingDeg != null && (
                 <span className="badge" title={`Camera faces ${Math.round(m.headingDeg)}° on the plan`}>
                   <span style={{ display: "inline-block", transform: `rotate(${m.headingDeg}deg)` }}>↑</span>
@@ -212,6 +270,12 @@ export default function AnalyzePage() {
             <span className="badge bad" title={matchErrors[photoId]}>match failed</span>
           ) : null}
           {m?.reasoning && <div className="muted" style={{ fontSize: 11 }}>{m.reasoning}</div>}
+          {m?.suggestedRoomId && graph?.rooms.some((r) => r.id === m.suggestedRoomId) && (
+            <div className="notice small" style={{ padding: "4px 6px" }}>
+              Placement pass thinks this is the {graph.rooms.find((r) => r.id === m.suggestedRoomId)!.label}.{" "}
+              <button className="linklike" onClick={() => assign(photoId, m.suggestedRoomId!)}>Move it</button>
+            </div>
+          )}
           {depthErrors[photoId] && <span className="badge bad" title={depthErrors[photoId]}>depth failed</span>}
           {graph && (
             <select
@@ -312,6 +376,40 @@ export default function AnalyzePage() {
             <CostNote action="match" />
             {matchBusy && <div className="progress"><div style={{ width: `${(100 * matchBusy.done) / Math.max(1, matchBusy.total)}%` }} /></div>}
 
+            {roomsWithPhotos.length > 0 && (
+              <div className="match-room">
+                <h3>
+                  Place cameras{" "}
+                  <span className={`badge ${placedCount === sortedCount ? "ok" : ""}`}>{placedCount}/{sortedCount} placed</span>
+                </h3>
+                <p className="small muted" style={{ marginTop: 0 }}>
+                  Second pass, after the rooms look right: Gemini looks at each room&apos;s photos together and works out where each
+                  one was taken. This lines the photos up in 3D, and it restores camera positions for photos you moved by hand.{" "}
+                  {floorPlan ? `One call per room (${roomsWithPhotos.length}); rooms you haven't changed come from cache.` : "Needs the floor plan."}
+                </p>
+                <button className="btn" onClick={runPlacement} disabled={!!placeBusy || !!matchBusy || !status?.gemini || !floorPlan}>
+                  {placeBusy ? <><span className="spinner" /> {placeBusy.done}/{placeBusy.total} rooms</> : placedCount ? "Re-place cameras" : "Place cameras"}
+                </button>
+                <CostNote action="place" />
+                {placedCount > 0 && graph && (
+                  <div style={{ borderRadius: 10, overflow: "hidden", background: "var(--bg)", marginTop: 8 }}>
+                    <FloorPlanGraph
+                      graph={graph}
+                      floorPlan={floorPlan}
+                      photoCounts={photoCounts}
+                      current={null}
+                      onSelect={() => {}}
+                      height={300}
+                      cameras={inRooms
+                        .filter((m) => m.placed && m.cameraPosition && m.headingDeg != null)
+                        .map((m) => ({ ...m.cameraPosition!, headingDeg: m.headingDeg! }))}
+                    />
+                  </div>
+                )}
+                {placeBusy && <div className="progress"><div style={{ width: `${(100 * placeBusy.done) / Math.max(1, placeBusy.total)}%` }} /></div>}
+                {placeErrors.length > 0 && <div className="notice bad small" style={{ marginTop: 8 }}>{placeErrors.join(" · ")}</div>}
+              </div>
+            )}
             {needsReview.length > 0 && (
               <div className="match-room">
                 <h3>

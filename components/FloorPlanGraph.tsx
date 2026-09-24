@@ -12,6 +12,8 @@ interface Props {
   current: string | null;
   onSelect: (roomId: string) => void;
   height?: number;
+  /** Camera positions to draw as arrows (normalized plan coords, heading 0 = up, clockwise). */
+  cameras?: { x: number; y: number; headingDeg: number }[];
 }
 
 const COLORS = {
@@ -27,7 +29,7 @@ const COLORS = {
  * normalized plan coordinates from the room graph, so it lines up with the
  * image whatever its size.
  */
-export default function FloorPlanGraph({ graph, floorPlan, photoCounts, current, onSelect, height = 320 }: Props) {
+export default function FloorPlanGraph({ graph, floorPlan, photoCounts, current, onSelect, height = 320, cameras }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
   const live = useRef({ current, onSelect, photoCounts });
@@ -35,7 +37,11 @@ export default function FloorPlanGraph({ graph, floorPlan, photoCounts, current,
     live.current = { current, onSelect, photoCounts };
   });
 
+  // Rebuild only when the cameras actually change, not on every parent render.
+  const camerasKey = JSON.stringify(cameras ?? []);
+
   useEffect(() => {
+    const camerasList = JSON.parse(camerasKey) as NonNullable<Props["cameras"]>;
     const host = hostRef.current!;
     const aspect = floorPlan ? floorPlan.width / floorPlan.height : 1;
     const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
@@ -105,6 +111,26 @@ export default function FloorPlanGraph({ graph, floorPlan, photoCounts, current,
     const ring = new THREE.Mesh(ringGeo, ringMat);
     scene.add(ring);
     disposables.push(ringMat);
+
+    // Camera arrows: where each photo was taken and which way it faces.
+    const camMat = new THREE.MeshBasicMaterial({ color: "#e8590c", side: THREE.DoubleSide });
+    disposables.push(camMat);
+    for (const c of camerasList) {
+      const h = (c.headingDeg * Math.PI) / 180;
+      const dir = new THREE.Vector3(Math.sin(h), Math.cos(h), 0), perp = new THREE.Vector3(dir.y, -dir.x, 0);
+      const p = toWorld(c);
+      const len = r0 * 1.8, w = r0 * 0.7;
+      const geo = new THREE.BufferGeometry().setFromPoints([
+        p.clone().addScaledVector(dir, len),
+        p.clone().addScaledVector(perp, w),
+        p.clone().addScaledVector(perp, -w),
+      ]);
+      geo.setIndex([0, 1, 2]);
+      const tri = new THREE.Mesh(geo, camMat);
+      tri.position.z = 0.5;
+      scene.add(tri);
+      disposables.push(geo);
+    }
 
     // Labels (HTML, so they stay crisp)
     const labelEls = new Map<string, HTMLButtonElement>();
@@ -213,7 +239,7 @@ export default function FloorPlanGraph({ graph, floorPlan, photoCounts, current,
       renderer.domElement.remove();
       labels.innerHTML = "";
     };
-  }, [graph, floorPlan]);
+  }, [graph, floorPlan, camerasKey]);
 
   return (
     <div ref={hostRef} style={{ position: "relative", width: "100%", height }}>
