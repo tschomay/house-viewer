@@ -14,11 +14,15 @@ export default function StereoControls({
   setLayout,
   strength,
   setStrength,
+  pairWidth,
+  setPairWidth,
 }: {
   layout: StereoLayout;
   setLayout: (l: StereoLayout) => void;
   strength: number;
   setStrength: (s: number) => void;
+  pairWidth: number;
+  setPairWidth: (w: number) => void;
 }) {
   return (
     <div className="row" style={{ justifyContent: "space-between" }}>
@@ -29,10 +33,36 @@ export default function StereoControls({
           </button>
         ))}
       </div>
-      {layout !== "mono" && (
-        <label className="row small muted" style={{ gap: 6 }}>
-          Depth
-          <input type="range" min={0.3} max={3} step={0.1} value={strength} onChange={(e) => setStrength(Number(e.target.value))} />
+      <StereoSliders layout={layout} strength={strength} setStrength={setStrength} pairWidth={pairWidth} setPairWidth={setPairWidth} />
+    </div>
+  );
+}
+
+/** Depth, plus Width for side-by-side layouts. Also used in the tour's tap-to-show overlay. */
+export function StereoSliders({
+  layout,
+  strength,
+  setStrength,
+  pairWidth,
+  setPairWidth,
+}: {
+  layout: StereoLayout;
+  strength: number;
+  setStrength: (s: number) => void;
+  pairWidth: number;
+  setPairWidth: (w: number) => void;
+}) {
+  if (layout === "mono") return null;
+  return (
+    <div className="row" style={{ gap: 12 }}>
+      <label className="row small muted" style={{ gap: 6 }}>
+        Depth
+        <input type="range" min={0.3} max={3} step={0.1} value={strength} onChange={(e) => setStrength(Number(e.target.value))} />
+      </label>
+      {(layout === "cross" || layout === "parallel") && (
+        <label className="row small muted" style={{ gap: 6 }} title="Squeeze the pair towards the middle: a landscape phone is wider than your eyes are apart">
+          Width
+          <input type="range" min={0.3} max={1} step={0.02} value={pairWidth} onChange={(e) => setPairWidth(Number(e.target.value))} />
         </label>
       )}
     </div>

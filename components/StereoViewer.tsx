@@ -12,6 +12,12 @@ interface Props {
   layout: StereoLayout;
   /** Multiplier on a 64 mm eye separation. ~1 is natural; more exaggerates depth. */
   strength: number;
+  /**
+   * Side-by-side only: share of the screen width the pair may use (0.3–1).
+   * A phone in landscape is wider than eyes are apart; squeezing the pair
+   * towards the middle makes it fusable.
+   */
+  pairWidth?: number;
   activeLayer: number;
   gyro: boolean;
   /** Set when navigating away: dolly the camera forward ("walking" out). */
@@ -29,12 +35,12 @@ const MAX_PARALLAX = 0.12; // metres of simulated head movement at full tilt
  * Triangles across depth edges are dropped (see gridIndices); a flat copy of
  * the photo far behind fills the resulting holes.
  */
-export default function StereoViewer({ model, layout, strength, activeLayer, gyro, exiting, className }: Props) {
+export default function StereoViewer({ model, layout, strength, pairWidth = 1, activeLayer, gyro, exiting, className }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const guideRef = useRef<HTMLDivElement>(null);
-  const live = useRef({ layout, strength, activeLayer, gyro, exiting: !!exiting });
+  const live = useRef({ layout, strength, pairWidth, activeLayer, gyro, exiting: !!exiting });
   useEffect(() => {
-    live.current = { layout, strength, activeLayer, gyro, exiting: !!exiting };
+    live.current = { layout, strength, pairWidth, activeLayer, gyro, exiting: !!exiting };
   });
 
   useEffect(() => {
@@ -202,7 +208,7 @@ export default function StereoViewer({ model, layout, strength, activeLayer, gyr
       raf = requestAnimationFrame(tick);
       const dt = Math.min(0.05, clock.getDelta());
       frame++;
-      const { layout, strength, activeLayer, exiting } = live.current;
+      const { layout, strength, pairWidth, activeLayer, exiting } = live.current;
       const k = 1 - Math.exp(-dt * 10);
       for (const key of ["yaw", "pitch", "tx", "ty"] as const) look[key] += (target[key] - look[key]) * k;
       dolly += ((exiting ? 0.7 : 0) - dolly) * (1 - Math.exp(-dt * 6));
@@ -254,7 +260,9 @@ export default function StereoViewer({ model, layout, strength, activeLayer, gyr
         stereo.update(camera);
         // Cross-eyed viewing: the LEFT image is what the RIGHT eye sees.
         const [first, second] = layout === "cross" ? [stereo.cameraR, stereo.cameraL] : [stereo.cameraL, stereo.cameraR];
-        eyes.push({ cam: first, x: 0, w: width / 2 }, { cam: second, x: width / 2, w: width / 2 });
+        const total = width * Math.min(1, Math.max(0.3, pairWidth));
+        const left = (width - total) / 2;
+        eyes.push({ cam: first, x: left, w: total / 2 }, { cam: second, x: left + total / 2, w: total / 2 });
       }
 
       const guides: string[] = [];

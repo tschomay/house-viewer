@@ -6,7 +6,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useProject } from "@/lib/client/project";
 import { buildRoomModel, type RoomModel } from "@/lib/client/room-model";
 import { requestGyroPermission } from "@/lib/client/gyro";
-import StereoControls from "@/components/StereoControls";
+import StereoControls, { StereoSliders } from "@/components/StereoControls";
+import { usePref } from "@/lib/client/prefs";
+import { repairCentroids } from "@/lib/room-graph";
 import type { StereoLayout } from "@/components/StereoViewer";
 import type { Room, RoomGraph } from "@/lib/types";
 
@@ -24,8 +26,13 @@ const START_PREFERENCE = ["entry", "living", "kitchen", "dining"];
 
 export default function TourPage() {
   const { project, photos, floorPlan, ready } = useProject();
-  const [layout, setLayout] = useState<StereoLayout>("cross");
-  const [strength, setStrength] = useState(1);
+  const [layout, setLayout] = usePref<StereoLayout>("layout", "cross");
+  const [strength, setStrength] = usePref<number>("strength", 1);
+  const [pairWidth, setPairWidth] = usePref<number>("pairWidth", 1);
+  // Tap-to-show overlay: direction arrows to neighbouring rooms + sliders.
+  const [overlay, setOverlay] = useState(false);
+  const overlayTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const tapStart = useRef<{ x: number; y: number; t: number } | null>(null);
   const [gyro, setGyro] = useState(false);
   const [gyroMsg, setGyroMsg] = useState<string | null>(null);
   const [tryMerge, setTryMerge] = useState(true);
@@ -172,9 +179,57 @@ export default function TourPage() {
   const layer = model?.layers[Math.min(active, layerCount - 1)];
   const unplaced = !!model?.layers.some((l) => project.matches[l.photo.id]?.headingDeg == null);
 
+  /** Show the overlay and (re)start its auto-hide timer. */
+  const poke = () => {
+    setOverlay(true);
+    clearTimeout(overlayTimer.current);
+    overlayTimer.current = setTimeout(() => setOverlay(false), 8000);
+  };
+  const onStageDown = (e: React.PointerEvent) => {
+    tapStart.current = { x: e.clientX, y: e.clientY, t: Date.now() };
+  };
+  const onStageUp = (e: React.PointerEvent) => {
+    const s = tapStart.current;
+    tapStart.current = null;
+    // A tap, not a drag-to-look-around.
+    if (!s || Math.hypot(e.clientX - s.x, e.clientY - s.y) > 10 || Date.now() - s.t > 500) return;
+    if (overlay) {
+      setOverlay(false);
+      clearTimeout(overlayTimer.current);
+    } else poke();
+  };
+
+  // Where each neighbouring room lies relative to the way the current photo faces.
+  const viewHeading = (() => {
+    if (!layer) return 0;
+    if (model?.mode === "merged") return (-layer.pose.yaw * 180) / Math.PI;
+    return project.matches[layer.photo.id]?.headingDeg ?? 0;
+  })();
+  const navTargets = (() => {
+    if (!room || !project.graph) return [];
+    const rooms = repairCentroids(project.graph.rooms.map((r) => ({ ...r })));
+    const here = rooms.find((r) => r.id === room.id);
+    if (!here) return [];
+    const aspect = floorPlan ? floorPlan.width / floorPlan.height : 1;
+    return room.neighbors
+      .map((id) => rooms.find((r) => r.id === id))
+      .filter((r): r is Room => !!r)
+      .map((r) => {
+        const bearing = (Math.atan2((r.centroid.x - here.centroid.x) * aspect, -(r.centroid.y - here.centroid.y)) * 180) / Math.PI;
+        const rel = ((((bearing - viewHeading) % 360) + 540) % 360) - 180; // −180..180, 0 = straight ahead
+        return { room: r, rel };
+      });
+  })();
+
   return (
     <main className="tour">
-      <div ref={stageRef} className={`stage ${full ? "full" : ""}`} data-sbs={layout === "cross" || layout === "parallel"}>
+      <div
+        ref={stageRef}
+        className={`stage ${full ? "full" : ""}`}
+        data-sbs={layout === "cross" || layout === "parallel"}
+        onPointerDown={onStageDown}
+        onPointerUp={onStageUp}
+      >
         {shown.map((s) => (
           <div key={s.key} className={`stage-layer ${s.phase === "enter" ? "enter" : s.phase === "exit" ? "exit" : ""}`}>
             {s.model ? (
@@ -182,6 +237,7 @@ export default function TourPage() {
                 model={s.model}
                 layout={layout}
                 strength={strength}
+                pairWidth={pairWidth}
                 activeLayer={s.key === top?.key ? active : 0}
                 gyro={gyro}
                 exiting={s.phase === "exit"}
@@ -198,6 +254,31 @@ export default function TourPage() {
         ))}
         {building && <div className="center-msg" style={{ pointerEvents: "none" }}><span className="spinner" /></div>}
         {room && <div className="stage-title">{room.label}</div>}
+        {overlay && (
+          <div className="nav-overlay" onPointerDown={(e) => e.stopPropagation()} onPointerUp={(e) => e.stopPropagation()}>
+            {navTargets.map(({ room: r, rel }) => {
+              const a = (rel * Math.PI) / 180;
+              return (
+                <button
+                  key={r.id}
+                  className={`nav-arrow ${photoCounts[r.id] ? "" : "dim"}`}
+                  style={{ left: `${50 + 40 * Math.sin(a)}%`, top: `${46 - 36 * Math.cos(a)}%` }}
+                  onClick={() => {
+                    setOverlay(false);
+                    setCurrent(r.id);
+                  }}
+                >
+                  <span className="glyph" style={{ transform: `rotate(${rel}deg)` }}>↑</span> {r.label}
+                </button>
+              );
+            })}
+            {!navTargets.length && <div className="nav-arrow" style={{ left: "50%", top: "46%" }}>No connected rooms</div>}
+            <div className="nav-sliders" onPointerDown={poke} onInput={poke}>
+              <StereoSliders layout={layout} strength={strength} setStrength={setStrength} pairWidth={pairWidth} setPairWidth={setPairWidth} />
+            </div>
+          </div>
+        )}
+        {!overlay && room && <div className="nav-hint">Tap for directions</div>}
         <div className="stage-tools">
           {layerCount > 1 && (
             <button className="btn small" onClick={() => setActive((a) => (a + 1) % layerCount)} title="Next viewpoint in this room">
@@ -212,7 +293,7 @@ export default function TourPage() {
       </div>
 
       <div className="controls">
-        <StereoControls layout={layout} setLayout={setLayout} strength={strength} setStrength={setStrength} />
+        <StereoControls layout={layout} setLayout={setLayout} strength={strength} setStrength={setStrength} pairWidth={pairWidth} setPairWidth={setPairWidth} />
         {gyroMsg && <div className="notice small">{gyroMsg}</div>}
         {room && (
           <div className="chips" aria-label="Adjacent rooms">

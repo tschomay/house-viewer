@@ -29,6 +29,11 @@ The original brief (goals, pipeline, build order, open questions) is summarized 
 - **Placement for a 6-photo master suite timed out** (Vercel logs: "Task timed out after 120 seconds", twice, since the client retries once). `/api/place-photos` now allows 300 s, and big rooms are split into calls of ≤4 photos. The error now says "timed out", and that tapping **Re-place cameras** retries only the failed rooms (finished rooms come from cache).
 - **Export / Import project** (Listing page): the whole project as one JSON file, depth maps excluded. Used to hand the real house to a debugging session, since projects live only in the phone's IndexedDB.
 
+## Tour controls (user request, 2026-09-24)
+
+- **Width slider** (side-by-side layouts): squeezes the stereo pair towards the middle of the screen. A landscape phone is wider than the viewer's eyes are apart, which made the pair hard to fuse. Saved per device, as are Depth and layout (`lib/client/prefs.ts`).
+- **Tap for directions**: a tap (not a drag) on the 3D view shows arrow buttons to each connected room, placed by where the room lies relative to the way the current photo faces (↑ ahead, ↙ behind-left…), plus Depth/Width sliders. Tap an arrow to walk there. Auto-hides after 8 s. Checked in a landscape phone-sized browser: arrows point correctly from the demo living room, the Width slider works, and the Kitchen arrow navigates.
+
 ## Deployment
 
 - Vercel project **house-viewer** (team `tschomay`), linked to this repo; `main` auto-deploys to production at https://house-viewer-tschomay.vercel.app.
