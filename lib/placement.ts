@@ -65,7 +65,15 @@ const side = (from: PlanPoint, to: PlanPoint) => {
 
 const f2 = (n: number) => n.toFixed(2);
 
-export function placementPrompt(room: Room, graph: RoomGraph, photoCount: number): string {
+/** A camera the user set by hand, by its photo number in the call. */
+export interface FixedCamera {
+  photo: number;
+  x: number;
+  y: number;
+  headingDeg: number;
+}
+
+export function placementPrompt(room: Room, graph: RoomGraph, photoCount: number, fixed: FixedCamera[] = []): string {
   const b = room.bbox;
   const neighbors = room.neighbors
     .map((id) => graph.rooms.find((r) => r.id === id))
@@ -80,7 +88,13 @@ Openings lead to: ${neighbors.join(", ") || "none listed"}.
 For each photo, work out where the photographer stood and which way the camera faced, in floor-plan coordinates.
 - Match what the photo shows to the plan: windows, doorways into the neighbouring rooms, closets, fixtures, and which walls are on the photo's left and right.
 - Use the photos together: if one photo shows the doorway or corner another was taken from, their positions must agree. Photographers usually shoot from a corner or doorway, facing into the room, at about 1.5 m height.
-- The camera stands inside the outline or in one of its doorways.
+- The camera stands inside the outline or in one of its doorways.${
+    fixed.length
+      ? `\n- The user set these cameras by hand. Treat them as correct, return them unchanged, and place the other photos consistently with them: ${fixed
+          .map((c) => `PHOTO ${c.photo} at (${f2(c.x)}, ${f2(c.y)}) facing ${Math.round(c.headingDeg)}°`)
+          .join("; ")}.`
+      : ""
+  }
 - If a photo clearly does not show this room, set belongsHere to false and give betterRoomId from: ${others.join(", ") || "none"}.
 Return only JSON matching the schema, with one entry per photo.`;
 }
@@ -122,6 +136,8 @@ export function normalizePlacements(raw: unknown, photoIds: string[], room: Room
 
 /** Fold a placement into the photo's match. Room choice, confidence and the manual flag are kept. */
 export function applyPlacement(match: PhotoMatch, p: Placement): PhotoMatch {
+  // A camera set by hand wins; keep only Gemini's note and any room doubt.
+  if (match.manualPose) return { ...match, placementNote: p.note, suggestedRoomId: p.suggestedRoomId };
   const usable = p.belongsHere && p.headingDeg != null;
   return {
     ...match,

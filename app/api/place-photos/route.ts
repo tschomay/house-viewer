@@ -10,7 +10,7 @@ export const POST = gated(async (req, creds) => {
   const body = (await req.json().catch(() => ({}))) as {
     roomId?: string;
     graph?: RoomGraph;
-    photos?: { id: string; dataUrl: string }[];
+    photos?: { id: string; dataUrl: string; fixedPose?: { x: number; y: number; headingDeg: number } | null }[];
     floorPlan?: string;
   };
   const room = body.graph?.rooms?.find((r) => r.id === body.roomId);
@@ -21,7 +21,10 @@ export const POST = gated(async (req, creds) => {
     return Response.json({ error: `At most ${MAX_PHOTOS_PER_PLACEMENT} photos per request` }, { status: 400 });
   }
   try {
-    const { raw, parsed, usage } = await placePhotos(creds.geminiKey, room, body.graph, body.photos.map((p) => p.dataUrl), body.floorPlan);
+    const fixed = body.photos.flatMap((p, i) =>
+      p.fixedPose && [p.fixedPose.x, p.fixedPose.y, p.fixedPose.headingDeg].every(Number.isFinite) ? [{ photo: i + 1, ...p.fixedPose }] : [],
+    );
+    const { raw, parsed, usage } = await placePhotos(creds.geminiKey, room, body.graph, body.photos.map((p) => p.dataUrl), body.floorPlan, fixed);
     const placements = normalizePlacements(parsed, body.photos.map((p) => p.id), room, body.graph);
     return Response.json({ raw, placements, usage });
   } catch (e) {

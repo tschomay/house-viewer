@@ -19,6 +19,7 @@ import { MATCH_CONFIDENCE_THRESHOLD, type PhotoMatch, type RoomGraph } from "@/l
 const FloorPlanGraph = dynamic(() => import("@/components/FloorPlanGraph"), { ssr: false });
 const CostNote = dynamic(() => import("@/components/CostNote"), { ssr: false });
 const StereoTest = dynamic(() => import("@/components/StereoTest"), { ssr: false });
+const CameraEditor = dynamic(() => import("@/components/CameraEditor"), { ssr: false });
 
 type Busy = { label: string; done: number; total: number } | null;
 
@@ -46,6 +47,7 @@ export default function AnalyzePage() {
   const engine: DepthEngine = engineChoice ?? "browser";
   const [depthAbort, setDepthAbort] = useState<string | null>(null);
   const [testPhoto, setTestPhoto] = useState<string | null>(null);
+  const [editCamera, setEditCamera] = useState<string | null>(null);
 
   useEffect(
     () =>
@@ -203,13 +205,18 @@ export default function AnalyzePage() {
           const { room, ids } = job;
           let fresh = false;
           try {
-            const { placements } = await cached(`place:${graphKey}:${room.id}:${ids.join(",")}`, async () => {
+            const fixedPose = (id: string) => {
+              const m = project.matches[id];
+              return m?.manualPose && m.cameraPosition && m.headingDeg != null ? { ...m.cameraPosition, headingDeg: m.headingDeg } : null;
+            };
+            const fixedKey = JSON.stringify(ids.map(fixedPose));
+            const { placements } = await cached(`place:${graphKey}:${room.id}:${ids.join(",")}:${hashString(fixedKey)}`, async () => {
               // Smaller photos keep the request under the body limit; Gemini bills images per tile, not per pixel.
               const [plan, ...shots] = await Promise.all([
                 redrawImage(floorPlan.dataUrl, 1600, room.bbox),
                 ...ids.map((id) => redrawImage(byId.get(id)!.dataUrl, 1024)),
               ]);
-              const body = { roomId: room.id, graph, floorPlan: plan, photos: ids.map((id, i) => ({ id, dataUrl: shots[i] })) };
+              const body = { roomId: room.id, graph, floorPlan: plan, photos: ids.map((id, i) => ({ id, dataUrl: shots[i], fixedPose: fixedPose(id) })) };
               type Res = { raw: string; placements: Placement[]; usage?: GeminiUsage };
               // One retry: a multi-photo call is long enough that a dropped upstream connection happens.
               const res = await postJson<Res>("/api/place-photos", body).catch((e: Error & { status?: number }) =>
@@ -325,9 +332,11 @@ export default function AnalyzePage() {
               <span className={`badge ${m.status === "matched" ? "ok" : m.status === "low-confidence" ? "warn" : m.status === "exterior" ? "" : "bad"}`}>
                 {m.manual ? "manual" : `${Math.round(m.confidence * 100)}%`}
               </span>
-              {m.placed && (
+              {m.manualPose ? (
+                <span className="badge ok" title="Camera set by you">camera set</span>
+              ) : m.placed ? (
                 <span className="badge ok" title={m.placementNote || "Placed on the plan"}>placed</span>
-              )}
+              ) : null}
               {m.headingDeg != null && (
                 <span className="badge" title={`Camera faces ${Math.round(m.headingDeg)}° on the plan`}>
                   <span style={{ display: "inline-block", transform: `rotate(${m.headingDeg}deg)` }}>↑</span>
@@ -361,11 +370,18 @@ export default function AnalyzePage() {
               ))}
             </select>
           )}
-          {depth && (
-            <button className="btn small" onClick={() => setTestPhoto(photoId)}>
-              View in 3D
-            </button>
-          )}
+          <div className="row" style={{ gap: 6 }}>
+            {depth && (
+              <button className="btn small" onClick={() => setTestPhoto(photoId)}>
+                View in 3D
+              </button>
+            )}
+            {graph && floorPlan && m?.roomId && (
+              <button className="btn small" onClick={() => setEditCamera(photoId)} title="Move or turn this photo's camera on the plan">
+                Set camera
+              </button>
+            )}
+          </div>
         </div>
       </div>
     );
@@ -589,6 +605,19 @@ export default function AnalyzePage() {
         </Link>
       </div>
 
+      {editCamera && graph && byId.get(editCamera) && project.matches[editCamera] && (
+        <CameraEditor
+          graph={graph}
+          floorPlan={floorPlan}
+          photo={byId.get(editCamera)!}
+          match={project.matches[editCamera]}
+          onClose={() => setEditCamera(null)}
+          onSave={(pose) => {
+            dispatch({ type: "match", match: { ...project.matches[editCamera], ...pose, manualPose: true, placed: true } });
+            setEditCamera(null);
+          }}
+        />
+      )}
       {testPhoto && byId.get(testPhoto) && project.depth[testPhoto] && (
         <StereoTest photo={byId.get(testPhoto)!} depth={project.depth[testPhoto]} onClose={() => setTestPhoto(null)} />
       )}

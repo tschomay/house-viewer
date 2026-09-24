@@ -78,7 +78,7 @@ function roomBox(room: Room, origin: { x: number; y: number }, scale: { mx: numb
 
 /** A plan placement we trust enough to put the photo in the merged room without overlap evidence. */
 function isAnchored(m: PhotoMatch | undefined): boolean {
-  return !!m && m.headingDeg != null && m.cameraPosition != null && (m.placed || (!m.manual && m.confidence >= 0.7));
+  return !!m && m.headingDeg != null && m.cameraPosition != null && (m.placed || m.manualPose || (!m.manual && m.confidence >= 0.7));
 }
 
 export async function buildRoomModel(args: {
