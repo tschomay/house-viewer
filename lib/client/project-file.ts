@@ -33,5 +33,5 @@ export async function readProjectFile(file: File): Promise<Project> {
   }
   const p = parsed.project;
   if (parsed.format !== FORMAT || !p || !Array.isArray(p.images)) throw new Error("That isn't a House Viewer project file.");
-  return { ...(p as Project), depth: p.depth ?? {} };
+  return { ...(p as Project), depth: p.depth ?? {}, wallArt: p.wallArt ?? {} };
 }

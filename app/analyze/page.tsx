@@ -568,6 +568,11 @@ export default function AnalyzePage() {
 
       <div className="row" style={{ justifyContent: "space-between" }}>
         <Link className="btn ghost" href="/">← Listing</Link>
+        {graph && (
+          <Link className="btn" href="/flythrough" title="Optional: the whole house as a 3D model, with a guided flight through it">
+            3D fly-through
+          </Link>
+        )}
         <Link
           className="btn primary"
           href="/tour"

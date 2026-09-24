@@ -7,6 +7,7 @@ const STEPS = [
   { href: "/", label: "1 · Listing" },
   { href: "/analyze", label: "2 · Analyze" },
   { href: "/tour", label: "3 · Tour" },
+  { href: "/flythrough", label: "3D" },
 ];
 
 export default function TopBar() {

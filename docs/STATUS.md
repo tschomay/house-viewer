@@ -1,6 +1,6 @@
 # Project status & handoff
 
-_Last updated: 2026-09-24. Read this first if you're picking up the project in a new session._
+_Last updated: 2026-09-24 (3D fly-through added). Read this first if you're picking up the project in a new session._
 
 The original brief (goals, pipeline, build order, open questions) is summarized in [README.md](../README.md). This file covers **where things stand**, **what's been verified**, and **what to do next**.
 
@@ -21,6 +21,7 @@ The original brief (goals, pipeline, build order, open questions) is summarized 
 | Access gate (added on request) | ✅ done | curl: locked by default, bogus Gemini key rejected |
 | Manual camera editor | ✅ done (2026-09-24) | **Set camera** on a photo card: tap the plan + aim slider. Checked in the browser (pose saved with `manualPose`). The placement pass keeps hand-set cameras and gives them to Gemini as fixed references |
 | Seam feathering | ✅ done (2026-09-24) | side edges of the current photo fade into neighbours as you turn; off at rest. Checked with screenshots |
+| 3D fly-through (optional, `/flythrough`) | ✅ **built 2026-09-24, checked on the demo and the real Avon house** | See "3D fly-through" below. Headless screenshots along the whole route, mono and cross-eye, with and without AI walls and depth meshes; no page errors. Not yet tried on a real phone or a VR headset |
 | Gemini cost tracker | ✅ done | each Gemini button shows its last run's estimated cost and tokens, plus this device's running total (localStorage, with reset). Cached re-runs show as free. Rates in `lib/cost.ts` were checked against ai.google.dev pricing on 2026-09-24 |
 
 ## First real-house run (user, 2026-09-24): issues found and fixed
@@ -55,6 +56,19 @@ It imports, adds depth in ~3 s, tours the multi-photo rooms, and saves screensho
 - **Navigation arrows in 3D**: the tap-to-show directions are now Street View-style chevrons drawn on the floor in the scene, with a floating room label, so they appear in depth in the stereo pair. Tapping one in either eye's image walks there: raycast per eye viewport; three.js's StereoCamera doesn't update `projectionMatrixInverse`, so it's refreshed before each raycast. Rooms beside or behind you are pinned to the lower edge of the view, still pointing their true way. Checked in a landscape viewport: tapping the Kitchen arrow navigates. HTML buttons remain only for rooms with no photos.
 - **Width is remembered separately for portrait and landscape** (`usePairWidth`; landscape starts at 0.7).
 - **Zoomable floor plan maps** (Analyze page and Set camera): pinch or wheel to zoom, drag to pan when zoomed, +/−/⤢ buttons. The page itself doesn't zoom. Dots and arrows keep their on-screen size, and overlapping room labels are hidden until you zoom in. Set camera opens zoomed onto the photo's room, and a tap places the camera where you tapped. Checked on the user's real house export.
+
+## 3D fly-through (user request, 2026-09-24)
+
+An optional add-on: the whole house as a 3D model, with a guided flight through it. Open **3D** in the top bar (also linked from Analyze and Tour). Needs the room map and placed cameras; depth and AI walls are extras.
+
+- **Model** (`lib/house-model.ts`): storeys found by clustering plan boxes, stacked and aligned by their stairs. Rooms become boxes from the plan, with doorways cut between connected rooms and a front door on the entry. On Avon: 2 floors, 20 rooms, the stairs detected inside the foyer, and the front door on the foyer's street side, all correct.
+- **Painting**: each room's placed photos are projected back from their cameras. Near a viewpoint, the photo's depth mesh (if depth was run) fades in for real parallax. Unseen walls show AI wall art, or colours sampled from the photos without it.
+- **Route**: aerial approach → front door → every room, pausing ~2.5 s at each photo's viewpoint facing its way → upstairs → rise out to an overview. Avon: 17 rooms, **4:21 at 1×**. Controls: play/pause (or tap the view), speed 0.25–3×, scrubber with a mark per room, room chips to jump. Drag, **Tilt** (device orientation) or a WebXR headset (**VR** button, shown only when supported) to look around while it plays. **⟲ Ahead** re-centres. Stereo layouts are shared with the tour.
+- **AI wall fill**: one Gemini 3.1 Flash Image call per room (4 wall elevations in one image). **Avon: 14 rooms for $0.975** (two runs, $0.975 and $0.974; the estimate said $0.98). ~7–13 s a call, 3 in parallel. Optional "imagine rooms with no photos" (labelled in the viewer) and "careful (Pro)" (~2×). So a full Avon run is ≈ $2 (existing pipeline) + ≈ $1 (walls).
+- **Verified**: `npm test` (14 new tests: storeys, stairs, doorways, front door, texture orientation, tour order, stops facing each photo's way, the route never leaves the rooms, prompt/validation); `scripts/e2e-flythrough.mjs` on the demo and on the Avon fixture (with `DEPTH=` the fixture's depth maps and `WALLS=1`), screenshots checked by eye.
+- **Known gaps**: (1) photos without a camera position aren't used (Avon's master suite: run **Place cameras**). (2) Away from viewpoints, furniture is flattened onto walls and floor, and where two photos overlap there's some ghosting. (3) Stairs have no geometry: the flight climbs them, and the photos show the real ones. (4) A gap between two plan boxes (a hallway Gemini didn't list) is walked through in the open. (5) WebXR and Tilt are code-only: not tried on a headset or phone. (6) The VR rig turns with the path, which can be uncomfortable; a "no auto-turn" comfort option would be easy.
+- **Other tools worth trying** (user asked): **World Labs Marble API** (photos → explorable Gaussian-splat world): the most likely route to truly photoreal rooms, with its own account and key at roughly tens of cents per room. **Replicate** (already half-wired for depth) hosts image-to-3D and panorama models. **Veo 3.1** (on the same Gemini key; Fast ≈ $0.10/s at 720p) could render a cinematic clip per room from its best photo: ~$0.80 for 8 s, so as a per-room opt-in, not for the whole house.
+- **Test command**: `ACCESS_PASSWORD=... PROJECT=../house-viewer-fixtures/projects/avon-36316-s-park-dr.json DEPTH=../house-viewer-fixtures/depth/avon-36316-s-park-dr.browser.json [WALLS=1 | WALLART=<out>/wallart.json] [LAYOUT=cross] node scripts/e2e-flythrough.mjs http://localhost:3100 <out>`. `WALLS=1` spends ≈$1 and saves the art to `<out>/wallart.json`; `WALLART=` reuses it for free.
 
 ## Deployment
 
@@ -92,7 +106,8 @@ It imports, adds depth in ~3 s, tours the multi-photo rooms, and saves screensho
 4. **Ideas not built yet**, roughly by value per cost: (a) ~~manual camera nudge~~ done: **Set camera** on each photo card (tap plan + aim slider), checked in the browser; hand-set cameras are fixed anchors for the placement pass; (b) ~~corner bearings~~ tried and dropped: accurate corners, but most photos show only one, no pose gain, 2.7× placement cost (see README decisions); (c) ~~seam feathering~~ done: side edges fade as you turn, off at rest (checked with screenshots at rest and turned); (d) ~~cheaper matching~~ done: the one-call sort, on Flash by default (~$0.01 for the demo), with a **Careful (Pro)** button. Placement stays on Pro: **Flash was tried for placement and is worse** (demo: bedroom 90° off / 2.5 m, one kitchen photo 45° off / 2 m, against all within 25° on Pro) and only ~35% cheaper ($0.075 vs ~$0.11).
 5. **Replicate path: possible future improvement, not set up.** The user hasn't created a Replicate account, and on-device depth (Depth Anything V2 Small) is the default and works. Replicate would add the Large model on the server for sharper depth on slow phones, at a per-photo cost. To try it: set `REPLICATE_API_TOKEN` (Vercel env var, or a cloud-session API credential for `api.replicate.com` with header `Authorization`, prefix `Bearer`), then check `/api/depth` end to end. The model version is pinned in `lib/depth.ts`. If adopted, extend the cost tracker to Replicate's per-second billing.
 6. **Real-phone pass.** Cross-eye comfort (Depth slider default of 1.0 may be too strong), iOS motion permission, landscape layout, WebGPU vs WASM depth speed.
-7. **Open questions** from the brief are answered with defaults in the README. Revisit server-side caching (Vercel Blob/KV) if multi-device use matters.
+7. **3D fly-through next steps**: try it on a phone and a headset; place the Avon master suite cameras; use the outline-fitted poses from `buildRoomModel` (they're better than Gemini's raw ones) for the projectors; a comfort mode for VR; optionally World Labs or Veo for a more photoreal look (see "3D fly-through").
+8. **Open questions** from the brief are answered with defaults in the README. Revisit server-side caching (Vercel Blob/KV) if multi-device use matters.
 
 ## How to test
 

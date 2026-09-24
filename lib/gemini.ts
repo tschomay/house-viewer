@@ -4,6 +4,7 @@ import { geminiUsage, type GeminiUsage } from "./cost";
 import { PLACEMENT_SCHEMA, placementPrompt, type FixedCamera } from "./placement";
 import { SORT_SCHEMA, sortPrompt, type SortPhotoInput } from "./sorting";
 import type { Room, RoomGraph } from "./types";
+import { WALL_ART_ASPECT, wallArtPrompt, type WallArtRoom } from "./wall-art";
 
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
 /**
@@ -11,6 +12,14 @@ export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview"
  * (9/9) at ~1/15 of the cost. "Careful" re-checks use GEMINI_MODEL (Pro).
  */
 export const SORT_FAST_MODEL = process.env.GEMINI_SORT_MODEL || "gemini-3-flash-preview";
+
+/**
+ * Wall art for the 3D house. 3.1 Flash Image followed the 4-strip layout and
+ * matched the photos; Flash Lite Image (half the price) ignored the layout in
+ * testing. "Careful" uses 3 Pro Image (~2× the price).
+ */
+export const WALL_ART_MODEL = process.env.GEMINI_WALL_MODEL || "gemini-3.1-flash-image";
+export const WALL_ART_CAREFUL_MODEL = process.env.GEMINI_WALL_CAREFUL_MODEL || "gemini-3-pro-image-preview";
 
 export class MissingKeyError extends Error {}
 
@@ -165,4 +174,36 @@ export async function sortPhotos(
     { text: sortPrompt(graph, photos, context) },
   ];
   return streamJson(apiKey, parts, SORT_SCHEMA, careful ? GEMINI_MODEL : SORT_FAST_MODEL);
+}
+
+/** One room's wall art (see lib/wall-art.ts): photos + a blank 4-strip template in, one image out. */
+export async function generateWallArt(
+  apiKey: string | null,
+  room: WallArtRoom,
+  photoDataUrls: string[],
+  templateDataUrl: string,
+  careful = false,
+): Promise<{ dataUrl: string; usage: GeminiUsage; model: string }> {
+  const model = careful ? WALL_ART_CAREFUL_MODEL : WALL_ART_MODEL;
+  const parts: Part[] = [
+    ...photoDataUrls.flatMap((url, i) => [{ text: `PHOTO ${i + 1}:` }, { inlineData: splitDataUrl(url) }]),
+    { text: "TEMPLATE (4 strips, top to bottom):" },
+    { inlineData: splitDataUrl(templateDataUrl) },
+    { text: wallArtPrompt(room) },
+  ];
+  const res = await client(apiKey).models.generateContent({
+    model,
+    contents: [{ role: "user", parts }],
+    config: { responseModalities: ["IMAGE"], imageConfig: { aspectRatio: WALL_ART_ASPECT } },
+  });
+  const img = res.candidates?.[0]?.content?.parts?.find((p) => p.inlineData?.data);
+  if (!img?.inlineData?.data) {
+    const why = res.candidates?.[0]?.finishReason ?? res.promptFeedback?.blockReason ?? "no image returned";
+    throw new Error(`Gemini returned no image (${why})`);
+  }
+  return {
+    dataUrl: `data:${img.inlineData.mimeType ?? "image/png"};base64,${img.inlineData.data}`,
+    usage: geminiUsage(model, res.usageMetadata, process.env),
+    model,
+  };
 }

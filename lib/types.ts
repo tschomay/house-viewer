@@ -84,5 +84,17 @@ export interface ImportResult {
   error?: string;
 }
 
+/** AI wall textures for one room of the 3D house (see lib/wall-art.ts). */
+export interface WallArt {
+  roomId: string;
+  /** One image: 4 stacked strips, top/right/bottom/left wall. */
+  dataUrl: string;
+  /** No photos of this room: made up from the rest of the house. */
+  imagined: boolean;
+  model: string;
+  /** Cache key of the request that made it; a changed room or photo set makes it stale. */
+  key: string;
+}
+
 /** Below this, a Gemini match is shown in the "needs review" tray. */
 export const MATCH_CONFIDENCE_THRESHOLD = 0.55;

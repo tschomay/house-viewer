@@ -22,6 +22,16 @@ describe("geminiUsage", () => {
     expect(geminiRate("gemini-3.1-pro-preview", { GEMINI_PRICE_INPUT_PER_M: "1", GEMINI_PRICE_OUTPUT_PER_M: "5" })).toEqual({ input: 1, output: 5 });
   });
 
+  it("bills generated image tokens at the image rate", () => {
+    const u = geminiUsage("gemini-3.1-flash-image", {
+      promptTokenCount: 2000,
+      candidatesTokenCount: 1500,
+      candidatesTokensDetails: [{ modality: "IMAGE", tokenCount: 1120 }],
+    });
+    expect(u.usd).toBeCloseTo((2000 * 0.5 + 380 * 3 + 1120 * 60) / 1e6);
+    expect(geminiRate("gemini-3.1-flash-lite-image").imageOutput).toBe(30);
+  });
+
   it("treats missing metadata as zero", () => {
     expect(geminiUsage("gemini-3.1-pro-preview", undefined).usd).toBe(0);
   });
