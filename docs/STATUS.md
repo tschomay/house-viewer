@@ -23,6 +23,12 @@ The original brief (goals, pipeline, build order, open questions) is summarized 
 | Seam feathering | ✅ done (2026-09-24) | side edges of the current photo fade into neighbours as you turn; off at rest. Checked with screenshots |
 | Gemini cost tracker | ✅ done | each Gemini button shows its last run's estimated cost and tokens, plus this device's running total (localStorage, with reset). Cached re-runs show as free. Rates in `lib/cost.ts` were checked against ai.google.dev pricing on 2026-09-24 |
 
+## First real-house run (user, 2026-09-24): issues found and fixed
+
+- **Map dots all piled on the plan's bottom edge.** Gemini's room *bounding boxes* were right, but its separate centre points were not. A re-run on a crop of the same plan gave one centre at y = 2.21; in the user's saved project, apparently every centre was past the edge, and those get clamped to 1. Fix: a centre outside its own box is replaced by the box centre (`repairCentroids` in `lib/room-graph.ts`). New graphs are fixed at normalization. Saved graphs are fixed only when drawn, so their cache keys (and the paid Gemini results behind them) stay valid.
+- **Placement for a 6-photo master suite timed out** (Vercel logs: "Task timed out after 120 seconds", twice, since the client retries once). `/api/place-photos` now allows 300 s, and big rooms are split into calls of ≤4 photos. The error now says "timed out", and that tapping **Re-place cameras** retries only the failed rooms (finished rooms come from cache).
+- **Export / Import project** (Listing page): the whole project as one JSON file, depth maps excluded. Used to hand the real house to a debugging session, since projects live only in the phone's IndexedDB.
+
 ## Deployment
 
 - Vercel project **house-viewer** (team `tschomay`), linked to this repo; `main` auto-deploys to production at https://house-viewer-tschomay.vercel.app.

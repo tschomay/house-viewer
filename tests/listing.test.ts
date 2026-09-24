@@ -86,3 +86,19 @@ describe("room graph normalization", () => {
     expect(groups).toEqual({ kitchen: ["a"], _unmatched: ["b"] });
   });
 });
+
+describe("room graph centres", () => {
+  it("replaces a centre that falls outside its own bounding box", () => {
+    const g = normalizeRoomGraph({
+      rooms: [
+        { id: "a", label: "A", type: "bedroom", neighbors: [], centroid: { x: 0.45, y: 2.21 }, bbox: { x0: 0.35, y0: 0.16, x1: 0.54, y1: 0.29 } },
+        { id: "b", label: "B", type: "bedroom", neighbors: [], centroid: { x: 0.3, y: 0.2 }, bbox: { x0: 0.2, y0: 0.1, x1: 0.4, y1: 0.3 } },
+        { id: "c", label: "C", type: "other", neighbors: [], centroid: { x: 1.4, y: -1 }, bbox: null },
+      ],
+    });
+    expect(g.rooms[0].centroid.x).toBeCloseTo(0.445);
+    expect(g.rooms[0].centroid.y).toBeCloseTo(0.225);
+    expect(g.rooms[1].centroid).toEqual({ x: 0.3, y: 0.2 });
+    expect(g.rooms[2].centroid).toEqual({ x: 1, y: 0 });
+  });
+});

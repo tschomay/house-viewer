@@ -26,6 +26,8 @@ export function normalizeRoomGraph(raw: unknown): RoomGraph {
     seen.add(id);
     if (!idMap.has(rawId)) idMap.set(rawId, id);
     const c = (room.centroid ?? {}) as Record<string, unknown>;
+    const cx = typeof c.x === "number" && Number.isFinite(c.x) ? c.x : NaN;
+    const cy = typeof c.y === "number" && Number.isFinite(c.y) ? c.y : NaN;
     const b = room.bbox as Record<string, unknown> | null | undefined;
     const bbox =
       b && [b.x0, b.y0, b.x1, b.y1].every((v) => typeof v === "number" && Number.isFinite(v))
@@ -42,7 +44,7 @@ export function normalizeRoomGraph(raw: unknown): RoomGraph {
       label,
       type: typeof room.type === "string" ? room.type : "other",
       neighbors: (Array.isArray(room.neighbors) ? room.neighbors : []).filter((x): x is string => typeof x === "string"),
-      centroid: { x: clamp01(c.x), y: clamp01(c.y) },
+      centroid: { x: cx, y: cy },
       bbox: bbox && bbox.x1 > bbox.x0 && bbox.y1 > bbox.y0 ? bbox : null,
       sizeM:
         size && typeof size.width === "number" && typeof size.depth === "number" && size.width > 0 && size.depth > 0
@@ -50,6 +52,8 @@ export function normalizeRoomGraph(raw: unknown): RoomGraph {
           : null,
     });
   }
+
+  repairCentroids(rooms);
 
   const ids = new Set(rooms.map((r) => r.id));
   const resolve = (n: string) => idMap.get(n) ?? (ids.has(slug(n)) ? slug(n) : null);
@@ -66,6 +70,23 @@ export function normalizeRoomGraph(raw: unknown): RoomGraph {
   }
 
   return { rooms, notes: typeof obj.notes === "string" ? obj.notes : undefined };
+}
+
+/**
+ * Gemini's room bounding boxes are reliable; its separate centre points are
+ * not (seen on a real two-storey plan: every centre past the bottom edge, or
+ * one at y = 2.21). A centre outside its own box is replaced by the box's
+ * centre. Also used to repair graphs saved before this check existed.
+ */
+export function repairCentroids(rooms: Room[]): Room[] {
+  for (const r of rooms) {
+    const { x, y } = r.centroid;
+    const b = r.bbox;
+    const inside = b && x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1;
+    if (b && !inside) r.centroid = { x: (b.x0 + b.x1) / 2, y: (b.y0 + b.y1) / 2 };
+    else r.centroid = { x: clamp01(x), y: clamp01(y) };
+  }
+  return rooms;
 }
 
 export function normalizePhotoMatch(photoId: string, raw: unknown, graph: RoomGraph): PhotoMatch {

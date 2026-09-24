@@ -3,7 +3,9 @@ import { MissingKeyError, placePhotos } from "@/lib/gemini";
 import { MAX_PHOTOS_PER_PLACEMENT, normalizePlacements } from "@/lib/placement";
 import type { RoomGraph } from "@/lib/types";
 
-export const maxDuration = 120;
+// A room with several photos can think for well over 2 minutes (a 6-photo
+// master suite timed out at 120 s on Vercel, twice).
+export const maxDuration = 300;
 
 /** One room (or a slice of a big room's photos) per request; the client downsizes photos to fit the body limit. */
 export const POST = gated(async (req, creds) => {
