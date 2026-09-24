@@ -55,6 +55,8 @@ export interface PhotoMatch {
   manual?: boolean;
   /** Visual signature from the one-call sort (wall colour, flooring, ceiling). */
   appearance?: string;
+  /** Camera heading/position were set by hand on the map; the placement pass keeps them. */
+  manualPose?: boolean;
   /** Camera heading/position came from the per-room placement pass (all of a room's photos judged together). */
   placed?: boolean;
   /** Placement pass: what Gemini used to place the camera. */

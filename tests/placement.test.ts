@@ -51,6 +51,13 @@ describe("placement pass", () => {
     expect(doubted).toMatchObject({ placed: false, headingDeg: null, suggestedRoomId: "kitchen" });
   });
 
+  it("never moves a camera the user set by hand, and tells Gemini about it", () => {
+    const m: PhotoMatch = { photoId: "a", roomId: "living", confidence: 1, headingDeg: 90, cameraPosition: { x: 0.2, y: 0.2 }, reasoning: "", status: "matched", manualPose: true, placed: true };
+    const out = applyPlacement(m, { photoId: "a", belongsHere: true, suggestedRoomId: null, headingDeg: 270, cameraPosition: { x: 0.4, y: 0.4 }, confidence: 0.9, note: "n" });
+    expect(out).toMatchObject({ headingDeg: 90, cameraPosition: { x: 0.2, y: 0.2 }, manualPose: true, placementNote: "n" });
+    expect(placementPrompt(living, graph, 2, [{ photo: 2, x: 0.2, y: 0.25, headingDeg: 90 }])).toContain("PHOTO 2 at (0.20, 0.25) facing 90°");
+  });
+
   it("splits big rooms into even batches", () => {
     expect(placementBatches([1, 2, 3]).map((b) => b.length)).toEqual([3]);
     expect(placementBatches(Array.from({ length: 8 }, (_, i) => i)).map((b) => b.length)).toEqual([4, 4]);

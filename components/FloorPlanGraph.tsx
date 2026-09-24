@@ -14,6 +14,8 @@ interface Props {
   height?: number;
   /** Camera positions to draw as arrows (normalized plan coords, heading 0 = up, clockwise). */
   cameras?: { x: number; y: number; headingDeg: number }[];
+  /** When set, a tap anywhere on the plan reports its normalized plan coordinates instead of selecting a room. */
+  onPlanTap?: (p: { x: number; y: number }) => void;
 }
 
 const COLORS = {
@@ -29,12 +31,12 @@ const COLORS = {
  * normalized plan coordinates from the room graph, so it lines up with the
  * image whatever its size.
  */
-export default function FloorPlanGraph({ graph, floorPlan, photoCounts, current, onSelect, height = 320, cameras }: Props) {
+export default function FloorPlanGraph({ graph, floorPlan, photoCounts, current, onSelect, height = 320, cameras, onPlanTap }: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const labelsRef = useRef<HTMLDivElement>(null);
-  const live = useRef({ current, onSelect, photoCounts });
+  const live = useRef({ current, onSelect, photoCounts, onPlanTap });
   useEffect(() => {
-    live.current = { current, onSelect, photoCounts };
+    live.current = { current, onSelect, photoCounts, onPlanTap };
   });
 
   // Rebuild only when the cameras actually change, not on every parent render.
@@ -173,6 +175,10 @@ export default function FloorPlanGraph({ graph, floorPlan, photoCounts, current,
       const r = renderer.domElement.getBoundingClientRect();
       const ndc = new THREE.Vector2(((e.clientX - r.left) / r.width) * 2 - 1, -((e.clientY - r.top) / r.height) * 2 + 1);
       raycaster.setFromCamera(ndc, camera);
+      if (live.current.onPlanTap) {
+        const w = new THREE.Vector3(ndc.x, ndc.y, 0).unproject(camera);
+        return live.current.onPlanTap({ x: Math.min(1, Math.max(0, w.x / W)), y: Math.min(1, Math.max(0, 1 - w.y / H)) });
+      }
       const hit = raycaster.intersectObjects(nodes.map((n) => n.mesh))[0];
       if (hit) return live.current.onSelect(hit.object.userData.roomId);
       // Generous touch target: nearest node within ~3 radii.

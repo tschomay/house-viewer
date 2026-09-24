@@ -1,7 +1,7 @@
 import "server-only";
 import { GoogleGenAI, PartMediaResolutionLevel, type Part } from "@google/genai";
 import { geminiUsage, type GeminiUsage } from "./cost";
-import { PLACEMENT_SCHEMA, placementPrompt } from "./placement";
+import { PLACEMENT_SCHEMA, placementPrompt, type FixedCamera } from "./placement";
 import { SORT_SCHEMA, sortPrompt, type SortPhotoInput } from "./sorting";
 import type { Room, RoomGraph } from "./types";
 
@@ -144,12 +144,13 @@ export async function placePhotos(
   graph: RoomGraph,
   photoDataUrls: string[],
   floorPlanDataUrl: string,
+  fixed: FixedCamera[] = [],
 ): Promise<{ raw: string; parsed: unknown; usage: GeminiUsage }> {
   const parts = [
     { text: "FLOOR PLAN (the room is outlined in red):" },
     { inlineData: splitDataUrl(floorPlanDataUrl) },
     ...photoDataUrls.flatMap((url, i) => [{ text: `PHOTO ${i + 1}:` }, { inlineData: splitDataUrl(url) }]),
-    { text: placementPrompt(room, graph, photoDataUrls.length) },
+    { text: placementPrompt(room, graph, photoDataUrls.length, fixed) },
   ];
   return streamJson(apiKey, parts, PLACEMENT_SCHEMA);
 }
