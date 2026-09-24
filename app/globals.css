@@ -213,3 +213,18 @@ input[type="range"] { accent-color: var(--accent); width: 140px; }
   width: 34px; height: 34px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.2);
   background: rgba(14, 16, 20, 0.78); color: #fff; font-size: 18px; line-height: 1; cursor: pointer;
 }
+
+/* 3D fly-through */
+.stage.fly { height: min(66dvh, 80vw); }
+.fly-bar {
+  position: absolute; left: 8px; right: 8px; bottom: 8px; z-index: 3; display: flex; gap: 8px; align-items: center;
+  padding: 6px 8px; border-radius: 12px; background: rgba(14, 16, 20, 0.72); backdrop-filter: blur(6px);
+}
+.stage.fly .stage-title { bottom: 64px; }
+.fly-scrub { position: relative; flex: 1 1 auto; min-width: 60px; display: flex; align-items: center; }
+.fly-scrub input { width: 100%; accent-color: var(--accent); }
+.fly-ticks { position: absolute; left: 8px; right: 8px; top: 50%; height: 0; pointer-events: none; }
+.fly-ticks span { position: absolute; width: 2px; height: 8px; margin: -4px 0 0 -1px; background: rgba(255, 255, 255, 0.55); border-radius: 1px; }
+.fly-time { font-variant-numeric: tabular-nums; color: var(--muted); white-space: nowrap; }
+.fly-speed select { padding: 6px; border-radius: 8px; background: var(--bg); color: var(--text); border: 1px solid var(--line); }
+@media (max-width: 420px) { .fly-time { display: none; } }

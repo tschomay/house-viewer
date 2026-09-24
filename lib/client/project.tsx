@@ -1,7 +1,7 @@
 "use client";
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useReducer, useRef, useState, type ReactNode } from "react";
-import type { DepthMap, ImportResult, ListingImage, PhotoMatch, RoomGraph } from "../types";
+import type { DepthMap, ImportResult, ListingImage, PhotoMatch, RoomGraph, WallArt } from "../types";
 import { applyPlacement, type Placement } from "../placement";
 import { idbGet, idbSet } from "./idb";
 import { apiFetch, onCredsChange } from "./access";
@@ -16,6 +16,8 @@ export interface Project {
   matches: Record<string, PhotoMatch>;
   matchRaw: Record<string, string>;
   depth: Record<string, DepthMap>;
+  /** AI wall textures for the 3D fly-through, by room id. */
+  wallArt: Record<string, WallArt>;
   isDemo: boolean;
 }
 
@@ -29,6 +31,7 @@ const EMPTY: Project = {
   matches: {},
   matchRaw: {},
   depth: {},
+  wallArt: {},
   isDemo: false,
 };
 
@@ -44,6 +47,8 @@ type Action =
   | { type: "match"; match: PhotoMatch; raw?: string }
   | { type: "placement"; roomId: string; placement: Placement }
   | { type: "depth"; depth: DepthMap }
+  | { type: "wallArt"; art: WallArt }
+  | { type: "clearWallArt" }
   | { type: "replace"; project: Partial<Project> };
 
 function reducer(state: Project, action: Action): Project {
@@ -86,7 +91,7 @@ function reducer(state: Project, action: Action): Project {
         matches: {},
       };
     case "graph":
-      return { ...state, graph: action.graph, graphRaw: action.raw, graphSource: action.source, matches: {}, matchRaw: {} };
+      return { ...state, graph: action.graph, graphRaw: action.raw, graphSource: action.source, matches: {}, matchRaw: {}, wallArt: {} };
     case "match":
       return {
         ...state,
@@ -101,6 +106,10 @@ function reducer(state: Project, action: Action): Project {
     }
     case "depth":
       return { ...state, depth: { ...state.depth, [action.depth.photoId]: action.depth } };
+    case "wallArt":
+      return { ...state, wallArt: { ...state.wallArt, [action.art.roomId]: action.art } };
+    case "clearWallArt":
+      return { ...state, wallArt: {} };
     case "replace":
       return { ...state, ...action.project };
   }
