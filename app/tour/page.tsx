@@ -170,6 +170,7 @@ export default function TourPage() {
   const model = top?.model ?? null;
   const layerCount = model?.layers.length ?? 0;
   const layer = model?.layers[Math.min(active, layerCount - 1)];
+  const unplaced = !!model?.layers.some((l) => project.matches[l.photo.id]?.headingDeg == null);
 
   return (
     <main className="tour">
@@ -233,7 +234,9 @@ export default function TourPage() {
               {model.mode === "merged"
                 ? `${model.layers.filter((l) => l.registered).length} photos merged into one 3D room · drag to look around`
                 : layerCount > 1
-                  ? `${layerCount} photos, shown one at a time${tryMerge ? " (couldn't align them)" : ""}`
+                  ? `${layerCount} photos, shown one at a time${
+                      !tryMerge ? "" : unplaced ? " · run Place cameras on Analyze to merge them" : " (couldn't align them)"
+                    }`
                   : "Single photo · depth-shifted stereo"}
               {layer && !layer.registered && model.mode === "merged" && " · this photo isn't aligned"}
               {model.depthSource === "heuristic" && " · rough depth guess"}

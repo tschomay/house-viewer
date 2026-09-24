@@ -1,7 +1,8 @@
 import "server-only";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenAI, PartMediaResolutionLevel, type Part } from "@google/genai";
 import { geminiUsage, type GeminiUsage } from "./cost";
 import { PLACEMENT_SCHEMA, placementPrompt } from "./placement";
+import { SORT_SCHEMA, sortPrompt, type SortPhotoInput } from "./sorting";
 import type { Room, RoomGraph } from "./types";
 
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
@@ -150,14 +151,21 @@ export async function placePhotos(
     ...photoDataUrls.flatMap((url, i) => [{ text: `PHOTO ${i + 1}:` }, { inlineData: splitDataUrl(url) }]),
     { text: placementPrompt(room, graph, photoDataUrls.length) },
   ];
-  // Several photos means a long think (30–60 s). Streaming with thought summaries
-  // keeps bytes flowing, so proxies with an idle timeout don't cut the call.
+  return streamJson(apiKey, parts, PLACEMENT_SCHEMA);
+}
+
+/**
+ * JSON-mode call for long multi-image prompts (30–60 s of thinking). Streaming
+ * with thought summaries keeps bytes flowing, so proxies with an idle timeout
+ * don't cut the call.
+ */
+async function streamJson(apiKey: string | null, parts: Part[], schema: object): Promise<{ raw: string; parsed: unknown; usage: GeminiUsage }> {
   const stream = await client(apiKey).models.generateContentStream({
     model: GEMINI_MODEL,
     contents: [{ role: "user", parts }],
     config: {
       responseMimeType: "application/json",
-      responseJsonSchema: PLACEMENT_SCHEMA,
+      responseJsonSchema: schema,
       temperature: 0.2,
       thinkingConfig: { includeThoughts: true },
     },
@@ -169,4 +177,32 @@ export async function placePhotos(
     usageMetadata = chunk.usageMetadata ?? usageMetadata;
   }
   return { raw, parsed: JSON.parse(raw), usage: geminiUsage(GEMINI_MODEL, usageMetadata, process.env) };
+}
+
+/**
+ * Sort a whole listing's photos into rooms in one call (see lib/sorting.ts).
+ * Photos go at medium resolution (~560 tokens each instead of ~1100): plenty
+ * to judge wall colour, flooring and fixtures. The plan stays at high.
+ */
+export async function sortPhotos(
+  apiKey: string | null,
+  graph: RoomGraph,
+  photos: (SortPhotoInput & { dataUrl: string })[],
+  floorPlanDataUrl: string | undefined,
+  context: string[],
+): Promise<{ raw: string; parsed: unknown; usage: GeminiUsage }> {
+  const parts: Part[] = [
+    ...(floorPlanDataUrl
+      ? [
+          { text: "FLOOR PLAN:" },
+          { inlineData: splitDataUrl(floorPlanDataUrl), mediaResolution: { level: PartMediaResolutionLevel.MEDIA_RESOLUTION_HIGH } },
+        ]
+      : []),
+    ...photos.flatMap((p, i) => [
+      { text: `PHOTO ${i + 1}:` },
+      { inlineData: splitDataUrl(p.dataUrl), mediaResolution: { level: PartMediaResolutionLevel.MEDIA_RESOLUTION_MEDIUM } },
+    ]),
+    { text: sortPrompt(graph, photos, context) },
+  ];
+  return streamJson(apiKey, parts, SORT_SCHEMA);
 }
