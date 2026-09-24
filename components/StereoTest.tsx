@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import StereoViewer, { type StereoLayout } from "./StereoViewer";
 import StereoControls from "./StereoControls";
-import { usePref } from "@/lib/client/prefs";
+import { usePairWidth, usePref } from "@/lib/client/prefs";
 import { buildLayer, type RoomModel } from "@/lib/client/room-model";
 import { DEFAULT_INTRINSICS, IDENTITY_POSE } from "@/lib/geometry";
 import type { DepthMap, ListingImage } from "@/lib/types";
@@ -13,7 +13,7 @@ export default function StereoTest({ photo, depth, onClose }: { photo: ListingIm
   const [model, setModel] = useState<RoomModel | null>(null);
   const [layout, setLayout] = usePref<StereoLayout>("layout", "cross");
   const [strength, setStrength] = usePref<number>("strength", 1);
-  const [pairWidth, setPairWidth] = usePref<number>("pairWidth", 1);
+  const [pairWidth, setPairWidth] = usePairWidth();
 
   useEffect(() => {
     let alive = true;

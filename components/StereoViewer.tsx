@@ -7,6 +7,13 @@ import type { RoomModel } from "@/lib/client/room-model";
 
 export type StereoLayout = "cross" | "parallel" | "wiggle" | "mono";
 
+export interface NavTarget {
+  id: string;
+  label: string;
+  rel: number;
+  dim?: boolean;
+}
+
 interface Props {
   model: RoomModel;
   layout: StereoLayout;
@@ -18,6 +25,12 @@ interface Props {
    * towards the middle makes it fusable.
    */
   pairWidth?: number;
+  /** Neighbouring rooms to show as 3D floor arrows: `rel` = degrees from the active photo's facing, clockwise. */
+  nav?: NavTarget[];
+  showNav?: boolean;
+  onNavigate?: (roomId: string) => void;
+  /** A tap (not a drag) that didn't hit an arrow. */
+  onTap?: () => void;
   activeLayer: number;
   gyro: boolean;
   /** Set when navigating away: dolly the camera forward ("walking" out). */
@@ -35,12 +48,25 @@ const MAX_PARALLAX = 0.12; // metres of simulated head movement at full tilt
  * Triangles across depth edges are dropped (see gridIndices); a flat copy of
  * the photo far behind fills the resulting holes.
  */
-export default function StereoViewer({ model, layout, strength, pairWidth = 1, activeLayer, gyro, exiting, className }: Props) {
+export default function StereoViewer({
+  model,
+  layout,
+  strength,
+  pairWidth = 1,
+  nav,
+  showNav,
+  onNavigate,
+  onTap,
+  activeLayer,
+  gyro,
+  exiting,
+  className,
+}: Props) {
   const hostRef = useRef<HTMLDivElement>(null);
   const guideRef = useRef<HTMLDivElement>(null);
-  const live = useRef({ layout, strength, pairWidth, activeLayer, gyro, exiting: !!exiting });
+  const live = useRef({ layout, strength, pairWidth, activeLayer, gyro, exiting: !!exiting, nav, showNav, onNavigate, onTap });
   useEffect(() => {
-    live.current = { layout, strength, pairWidth, activeLayer, gyro, exiting: !!exiting };
+    live.current = { layout, strength, pairWidth, activeLayer, gyro, exiting: !!exiting, nav, showNav, onNavigate, onTap };
   });
 
   useEffect(() => {
@@ -131,6 +157,95 @@ export default function StereoViewer({ model, layout, strength, pairWidth = 1, a
     const stereo = new THREE.StereoCamera();
     stereo.aspect = 1; // we keep photo aspect per eye ourselves
 
+    // Navigation arrows: Street View-style chevrons on the floor a couple of
+    // metres ahead, pointing towards each neighbouring room. They live in the
+    // scene, so each eye sees them from its own position and they appear in
+    // depth; a third render pass draws them over the photos. Rooms off to the
+    // side or behind are pinned to the edge of the view, still pointing their
+    // true way.
+    const navGroup = new THREE.Group();
+    scene.add(navGroup);
+    const raycaster = new THREE.Raycaster();
+    let lastEyes: { cam: THREE.Camera; x: number; y: number; w: number; h: number }[] = [];
+    let navKey = "";
+    const chevron = (() => {
+      const sh = new THREE.Shape();
+      sh.moveTo(0, 0.3);
+      sh.lineTo(0.28, -0.05);
+      sh.lineTo(0.17, -0.14);
+      sh.lineTo(0, 0.07);
+      sh.lineTo(-0.17, -0.14);
+      sh.lineTo(-0.28, -0.05);
+      sh.closePath();
+      const g = new THREE.ShapeGeometry(sh);
+      g.rotateX(-Math.PI / 2); // lie flat, pointing forward (−Z)
+      return g;
+    })();
+    const hitDisc = new THREE.CircleGeometry(0.4, 20).rotateX(-Math.PI / 2);
+    disposables.push(chevron, hitDisc);
+    const navDisposables: { dispose(): void }[] = [];
+    const buildNav = (targets: NavTarget[]) => {
+      navDisposables.splice(0).forEach((d) => d.dispose());
+      navGroup.clear();
+      // Where each arrow sits: its true direction clamped into the view, spread apart so none overlap.
+      const HALF = 24; // degrees either side of straight ahead (the photo spans ±37.5° across, ±30° down)
+      const placed = [...targets]
+        .sort((a, b) => a.rel - b.rel)
+        .map((t) => ({ t, at: Math.max(-HALF, Math.min(HALF, t.rel)) }));
+      for (let i = 1; i < placed.length; i++) placed[i].at = Math.max(placed[i].at, placed[i - 1].at + 13);
+      const over = placed.length ? placed[placed.length - 1].at - HALF : 0;
+      if (over > 0) placed.forEach((p) => (p.at -= over));
+      for (const { t, at } of placed) {
+        const a = (at * Math.PI) / 180;
+        const behind = Math.min(1, Math.max(0, (Math.abs(t.rel) - HALF) / 90));
+        // ~15° below the horizon ahead, a little lower and nearer for rooms behind.
+        const d = 2.6 - 0.4 * behind;
+        const y = -0.7 - 0.12 * behind;
+        const item = new THREE.Group();
+        item.position.set(Math.sin(a) * d, y, -Math.cos(a) * d);
+        const mat = new THREE.MeshBasicMaterial({
+          color: t.dim ? "#c9ced6" : "#ffffff",
+          transparent: true,
+          opacity: t.dim ? 0.6 : 0.95,
+          depthTest: false,
+          side: THREE.DoubleSide,
+        });
+        const arrow = new THREE.Mesh(chevron, mat);
+        arrow.scale.setScalar(1.3);
+        arrow.rotation.y = (-t.rel * Math.PI) / 180;
+        arrow.userData.navId = t.id;
+        const hit = new THREE.Mesh(hitDisc, new THREE.MeshBasicMaterial({ visible: false }));
+        hit.userData.navId = t.id;
+        // Room name, floating just above the arrow.
+        const c = document.createElement("canvas");
+        c.width = 512;
+        c.height = 96;
+        const g = c.getContext("2d")!;
+        g.font = "600 52px system-ui, sans-serif";
+        const w = Math.min(500, g.measureText(t.label).width + 48);
+        g.fillStyle = "rgba(14,16,20,0.72)";
+        g.beginPath();
+        g.roundRect((512 - w) / 2, 8, w, 80, 40);
+        g.fill();
+        g.fillStyle = t.dim ? "#c9ced6" : "#ffffff";
+        g.textAlign = "center";
+        g.textBaseline = "middle";
+        g.fillText(t.label, 256, 50);
+        const tex = new THREE.CanvasTexture(c);
+        tex.colorSpace = THREE.SRGBColorSpace;
+        const spriteMat = new THREE.SpriteMaterial({ map: tex, depthTest: false, transparent: true });
+        const label = new THREE.Sprite(spriteMat);
+        label.scale.set(1.1, 0.21, 1);
+        label.position.set(0, 0.3, 0);
+        label.userData.navId = t.id;
+        item.add(arrow, hit, label);
+        item.traverse((o) => o.layers.set(2));
+        navGroup.add(item);
+        navDisposables.push(mat, hit.material as THREE.Material, tex, spriteMat);
+      }
+    };
+    disposables.push({ dispose: () => navDisposables.splice(0).forEach((d) => d.dispose()) });
+
     // Look-around state: drag (or mouse move) + gyro, both smoothed.
     const look = { yaw: 0, pitch: 0, tx: 0, ty: 0 };
     const target = { yaw: 0, pitch: 0, tx: 0, ty: 0 };
@@ -140,8 +255,11 @@ export default function StereoViewer({ model, layout, strength, pairWidth = 1, a
     const yawLimit = merged ? Math.PI : 0.18;
     const clamp = (v: number, l: number) => Math.max(-l, Math.min(l, v));
 
+    let tapStart: { x: number; y: number; t: number } | null = null;
     const onDown = (e: PointerEvent) => {
+      e.stopPropagation(); // taps are handled here, not by the page around the viewer
       dragging = { x: e.clientX, y: e.clientY, yaw: target.yaw, pitch: target.pitch };
+      tapStart = { x: e.clientX, y: e.clientY, t: performance.now() };
       renderer.domElement.setPointerCapture(e.pointerId);
     };
     const onMove = (e: PointerEvent) => {
@@ -156,7 +274,30 @@ export default function StereoViewer({ model, layout, strength, pairWidth = 1, a
         target.ty = -(((e.clientY - r.top) / r.height) * 2 - 1) * MAX_PARALLAX * 0.6;
       }
     };
-    const onUp = () => (dragging = null);
+    const onUp = (e: PointerEvent) => {
+      e.stopPropagation();
+      dragging = null;
+      const s = tapStart;
+      tapStart = null;
+      if (e.type !== "pointerup" || !s || Math.hypot(e.clientX - s.x, e.clientY - s.y) > 10 || performance.now() - s.t > 500) return;
+      // A tap: did it land on a floor arrow, in either eye's image?
+      if (live.current.showNav) {
+        const rect = renderer.domElement.getBoundingClientRect();
+        const px = e.clientX - rect.left, py = rect.height - (e.clientY - rect.top);
+        for (const eye of lastEyes) {
+          if (px < eye.x || px > eye.x + eye.w || py < eye.y || py > eye.y + eye.h) continue;
+          const ndc = new THREE.Vector2(((px - eye.x) / eye.w) * 2 - 1, ((py - eye.y) / eye.h) * 2 - 1);
+          raycaster.layers.set(2);
+          // StereoCamera sets its eye cameras' projection but not the inverse the raycaster unprojects with.
+          const cam = eye.cam as THREE.PerspectiveCamera;
+          cam.projectionMatrixInverse.copy(cam.projectionMatrix).invert();
+          raycaster.setFromCamera(ndc, cam);
+          const hit = raycaster.intersectObjects(navGroup.children, true).find((h) => h.object.userData.navId);
+          if (hit) return live.current.onNavigate?.(hit.object.userData.navId);
+        }
+      }
+      live.current.onTap?.();
+    };
     renderer.domElement.addEventListener("pointerdown", onDown);
     renderer.domElement.addEventListener("pointermove", onMove);
     renderer.domElement.addEventListener("pointerup", onUp);
@@ -241,6 +382,17 @@ export default function StereoViewer({ model, layout, strength, pairWidth = 1, a
       camera.focus = layer.focus * p.scale;
       camera.updateMatrixWorld();
 
+      const { nav, showNav } = live.current;
+      const key = showNav && nav ? JSON.stringify(nav) : "";
+      if (key !== navKey) {
+        navKey = key;
+        buildNav(key ? nav! : []);
+      }
+      // Anchored to where the active photo was taken (not to the look-around), so they stay put in the room.
+      navGroup.position.set(p.tx, 0, p.tz);
+      navGroup.rotation.set(0, p.yaw, 0);
+      navGroup.scale.setScalar(p.scale);
+
       renderer.setScissorTest(true);
       renderer.setViewport(0, 0, width, height);
       renderer.setScissor(0, 0, width, height);
@@ -266,6 +418,7 @@ export default function StereoViewer({ model, layout, strength, pairWidth = 1, a
       }
 
       const guides: string[] = [];
+      lastEyes = [];
       for (const [i, eye] of eyes.entries()) {
         const r = fit(eye.w - (eyes.length > 1 ? 4 : 0), height);
         // Pull the pair towards the centre line: easier to fuse.
@@ -279,6 +432,11 @@ export default function StereoViewer({ model, layout, strength, pairWidth = 1, a
         renderer.clearDepth();
         eye.cam.layers.set(1);
         renderer.render(scene, eye.cam);
+        if (navGroup.children.length) {
+          eye.cam.layers.set(2);
+          renderer.render(scene, eye.cam);
+        }
+        lastEyes.push({ cam: eye.cam, x, y, w: r.w, h: r.h });
         guides.push(`${x + r.w / 2}px`);
       }
       if (guideRef.current) {
