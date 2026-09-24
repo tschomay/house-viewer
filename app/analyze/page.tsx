@@ -7,11 +7,14 @@ import { useProject, useServerStatus } from "@/lib/client/project";
 import { apiFetch } from "@/lib/client/access";
 import { cached } from "@/lib/client/idb";
 import { hashString } from "@/lib/client/hash";
+import { beginRun, recordUsage } from "@/lib/client/cost";
+import type { GeminiUsage } from "@/lib/cost";
 import { estimateDepth, onModelProgress, type DepthEngine } from "@/lib/client/depth";
 import { groupByRoom } from "@/lib/room-graph";
 import { MATCH_CONFIDENCE_THRESHOLD, type PhotoMatch, type RoomGraph } from "@/lib/types";
 
 const FloorPlanGraph = dynamic(() => import("@/components/FloorPlanGraph"), { ssr: false });
+const CostNote = dynamic(() => import("@/components/CostNote"), { ssr: false });
 const StereoTest = dynamic(() => import("@/components/StereoTest"), { ssr: false });
 
 type Busy = { label: string; done: number; total: number } | null;
@@ -53,10 +56,16 @@ export default function AnalyzePage() {
     if (!floorPlan) return;
     setGraphBusy(true);
     setGraphError(null);
+    beginRun("graph");
+    let fresh = false;
     try {
-      const { raw, graph } = await cached(`graph:${floorPlan.id}`, () =>
-        postJson<{ raw: string; graph: RoomGraph }>("/api/room-graph", { floorPlan: floorPlan.dataUrl }),
-      );
+      const { raw, graph } = await cached(`graph:${floorPlan.id}`, async () => {
+        const res = await postJson<{ raw: string; graph: RoomGraph; usage?: GeminiUsage }>("/api/room-graph", { floorPlan: floorPlan.dataUrl });
+        fresh = true;
+        recordUsage("graph", res.usage);
+        return res;
+      });
+      if (!fresh) recordUsage("graph", null);
       console.log("[room-graph] raw Gemini output", raw);
       dispatch({ type: "graph", graph, raw, source: "gemini" });
     } catch (e) {
@@ -71,6 +80,7 @@ export default function AnalyzePage() {
     const graphKey = hashString(JSON.stringify(graph));
     const todo = photos.filter((p) => !project.matches[p.id]?.manual);
     setMatchErrors({});
+    beginRun("match");
     setMatchBusy({ label: "Matching photos to rooms", done: 0, total: todo.length });
     let done = 0;
     const queue = [...todo];
@@ -78,15 +88,20 @@ export default function AnalyzePage() {
       Array.from({ length: 3 }, async () => {
         for (let p = queue.shift(); p; p = queue.shift()) {
           const photo = p;
+          let fresh = false;
           try {
-            const { raw, match } = await cached(`match:${graphKey}:${photo.id}`, () =>
-              postJson<{ raw: string; match: PhotoMatch }>("/api/match-photo", {
+            const { raw, match } = await cached(`match:${graphKey}:${photo.id}`, async () => {
+              const res = await postJson<{ raw: string; match: PhotoMatch; usage?: GeminiUsage }>("/api/match-photo", {
                 photoId: photo.id,
                 photo: photo.dataUrl,
                 graph,
                 floorPlan: floorPlan?.dataUrl,
-              }),
-            );
+              });
+              fresh = true;
+              recordUsage("match", res.usage);
+              return res;
+            });
+            if (!fresh) recordUsage("match", null);
             dispatch({ type: "match", match, raw });
           } catch (e) {
             setMatchErrors((m) => ({ ...m, [photo.id]: (e as Error).message }));
@@ -257,6 +272,7 @@ export default function AnalyzePage() {
               </button>
               {status?.gemini && <span className="small muted">{status.geminiModel}</span>}
             </div>
+            <CostNote action="graph" />
             {graphError && <div className="notice bad" style={{ marginTop: 10 }}>{graphError}</div>}
             {graph && (
               <>
@@ -293,6 +309,7 @@ export default function AnalyzePage() {
               </button>
               <span className="small muted">Or pick rooms by hand below. Manual picks are kept on re-runs.</span>
             </div>
+            <CostNote action="match" />
             {matchBusy && <div className="progress"><div style={{ width: `${(100 * matchBusy.done) / Math.max(1, matchBusy.total)}%` }} /></div>}
 
             {needsReview.length > 0 && (

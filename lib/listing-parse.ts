@@ -126,7 +126,15 @@ export function extractListingImages(html: string, baseUrl: string): { photos: F
     found.push({ url: m[0], alt: FLOORPLAN.test(context) ? "floor plan" : undefined });
   }
 
-  // Normalize, filter, dedupe (keep the largest variant of each photo).
+  return normalizeFoundImages(found, baseUrl);
+}
+
+/**
+ * Normalize, filter and dedupe candidate image URLs (keeping the largest
+ * variant of each photo), then split out likely floor plans. Shared by the
+ * server-side page parser and the bookmarklet import.
+ */
+export function normalizeFoundImages(found: FoundImage[], baseUrl: string): { photos: FoundImage[]; floorPlans: FoundImage[] } {
   const best = new Map<string, FoundImage & { size: number; fp: boolean }>();
   for (const f of found) {
     const url = absolutize(f.url, baseUrl);

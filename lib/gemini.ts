@@ -1,5 +1,6 @@
 import "server-only";
 import { GoogleGenAI } from "@google/genai";
+import { geminiUsage, type GeminiUsage } from "./cost";
 import type { RoomGraph } from "./types";
 
 export const GEMINI_MODEL = process.env.GEMINI_MODEL || "gemini-3.1-pro-preview";
@@ -69,14 +70,14 @@ If the plan prints dimensions (e.g. 12'6" x 11'), convert to metres for sizeM; o
 If there are multiple floors on the image, include all rooms and connect floors via their stairs.
 Return only JSON matching the schema.`;
 
-export async function extractRoomGraph(apiKey: string | null, floorPlanDataUrl: string): Promise<{ raw: string; parsed: unknown }> {
+export async function extractRoomGraph(apiKey: string | null, floorPlanDataUrl: string): Promise<{ raw: string; parsed: unknown; usage: GeminiUsage }> {
   const res = await client(apiKey).models.generateContent({
     model: GEMINI_MODEL,
     contents: [{ role: "user", parts: [{ inlineData: splitDataUrl(floorPlanDataUrl) }, { text: ROOM_GRAPH_PROMPT }] }],
     config: { responseMimeType: "application/json", responseJsonSchema: ROOM_GRAPH_SCHEMA, temperature: 0.2 },
   });
   const raw = res.text ?? "";
-  return { raw, parsed: JSON.parse(raw) };
+  return { raw, parsed: JSON.parse(raw), usage: geminiUsage(GEMINI_MODEL, res.usageMetadata, process.env) };
 }
 
 const MATCH_SCHEMA = {
@@ -104,7 +105,7 @@ export async function matchPhoto(
   photoDataUrl: string,
   graph: RoomGraph,
   floorPlanDataUrl?: string,
-): Promise<{ raw: string; parsed: unknown }> {
+): Promise<{ raw: string; parsed: unknown; usage: GeminiUsage }> {
   const roomList = graph.rooms
     .map((r) => `- ${r.id}: ${r.label} (${r.type}), centre (${r.centroid.x.toFixed(2)}, ${r.centroid.y.toFixed(2)}), connects to [${r.neighbors.join(", ")}]`)
     .join("\n");
@@ -128,5 +129,5 @@ Return only JSON matching the schema.`,
     config: { responseMimeType: "application/json", responseJsonSchema: MATCH_SCHEMA, temperature: 0.2 },
   });
   const raw = res.text ?? "";
-  return { raw, parsed: JSON.parse(raw) };
+  return { raw, parsed: JSON.parse(raw), usage: geminiUsage(GEMINI_MODEL, res.usageMetadata, process.env) };
 }
