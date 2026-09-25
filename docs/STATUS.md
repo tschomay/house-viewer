@@ -1,6 +1,6 @@
 # Project status & handoff
 
-_Last updated: 2026-09-24 (tour snaps between static shots; image corruption fix). Read this first if you're picking up the project in a new session._
+_Last updated: 2026-09-25 (dollhouse view). Read this first if you're picking up the project in a new session._
 
 The original brief (goals, pipeline, build order, open questions) is summarized in [README.md](../README.md). This file covers **where things stand**, **what's been verified**, and **what to do next**.
 
@@ -22,6 +22,7 @@ The original brief (goals, pipeline, build order, open questions) is summarized 
 | Manual camera editor | ✅ done (2026-09-24) | **Set camera** on a photo card: tap the plan + aim slider. Checked in the browser (pose saved with `manualPose`). The placement pass keeps hand-set cameras and gives them to Gemini as fixed references |
 | Seam feathering | ⛔ removed (2026-09-24) | replaced by snapping between static shots; see "Tour: static shots" below |
 | 3D fly-through (optional, `/flythrough`) | ✅ **built 2026-09-24, checked on the demo and the real Avon house** | See "3D fly-through" below. Headless screenshots along the whole route, mono and cross-eye, with and without AI walls and depth meshes; no page errors. Not yet tried on a real phone or a VR headset |
+| Dollhouse (optional, `/dollhouse`) | ✅ **built 2026-09-25, checked on the demo and the real Avon house** | See "Dollhouse" below. Headless screenshots of every floor and control; no page errors. Not yet tried on a real phone |
 | Gemini cost tracker | ✅ done | each Gemini button shows its last run's estimated cost and tokens, plus this device's running total (localStorage, with reset). Cached re-runs show as free. Rates in `lib/cost.ts` were checked against ai.google.dev pricing on 2026-09-24 |
 
 ## First real-house run (user, 2026-09-24): issues found and fixed
@@ -66,6 +67,16 @@ It imports, adds depth in ~3 s, tours the multi-photo rooms, and saves screensho
 - **Navigation arrows in 3D**: the tap-to-show directions are now Street View-style chevrons drawn on the floor in the scene, with a floating room label, so they appear in depth in the stereo pair. Tapping one in either eye's image walks there: raycast per eye viewport; three.js's StereoCamera doesn't update `projectionMatrixInverse`, so it's refreshed before each raycast. Rooms beside or behind you are pinned to the lower edge of the view, still pointing their true way. Checked in a landscape viewport: tapping the Kitchen arrow navigates. HTML buttons remain only for rooms with no photos.
 - **Width is remembered separately for portrait and landscape** (`usePairWidth`; landscape starts at 0.7).
 - **Zoomable floor plan maps** (Analyze page and Set camera): pinch or wheel to zoom, drag to pan when zoomed, +/−/⤢ buttons. The page itself doesn't zoom. Dots and arrows keep their on-screen size, and overlapping room labels are hidden until you zoom in. Set camera opens zoomed onto the photo's room, and a tap places the camera where you tapped. Checked on the user's real house export.
+
+## Dollhouse (user request, 2026-09-25)
+
+"A screen to explore the dollhouse model, no VR: view, spin, zoom, switch floors." Open **Dollhouse** in the top bar (also linked from Analyze and Tour). It needs only the room map; placed photos paint the rooms, and AI wall art is used if the fly-through made some.
+
+- Same model and painting as the fly-through: the scene building moved from `HouseFlythrough.tsx` into `lib/client/house-scene.ts`, which both views use.
+- **Controls**: orbit (drag), zoom (pinch, scroll, +/− buttons), pan (two fingers, right-drag). The floor picker on the left hides the floors above the one picked (the top entry shows the whole house). **Top** looks straight down like the plan, **⟲** goes back to the three-quarter view from the front door's side, and **Spin** turns the house slowly until you touch it. The **Walls** slider cuts the walls down, and **outside walls** puts the siding back on. Room names over the view and room chips below fly the camera to that room; double-clicking a room does the same.
+- **Verified**: `scripts/e2e-dollhouse.mjs` on the demo (1 floor) and on the Avon fixture (2 floors, 20 rooms): home view, each floor, drag, zoom, top, low walls, siding, room chips and a label click; screenshots checked by eye, no page errors. Re-ran `e2e-flythrough.mjs` on Avon after the refactor: no page errors, same shots.
+- **Test command**: `PROJECT=../house-viewer-fixtures/projects/avon-36316-s-park-dr.json node scripts/e2e-dollhouse.mjs http://localhost:3100 <out>` (optional `WALLART=` as for the fly-through).
+- **Known gaps**: walls are zero-thickness, so cut-down walls show no top edge. From a low angle, inside walls between rooms still hide the rooms behind them (lower the walls). Rooms without placed photos are plain paint. Double-tap on touch devices depends on the browser sending `dblclick`; the labels and chips always work.
 
 ## 3D fly-through (user request, 2026-09-24)
 

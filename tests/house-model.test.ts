@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFlightPath, buildHouseModel, clusterFloors, doorway, EYE_H, roomWallInfo, sampleAt, STOREY_M, tourOrder } from "@/lib/house-model";
+import { buildFlightPath, buildHouseModel, clusterFloors, doorway, EYE_H, floorName, roomWallInfo, sampleAt, STOREY_M, tourOrder } from "@/lib/house-model";
 import { parseWallArtRoom, wallArtPrompt } from "@/lib/wall-art";
 import type { PhotoMatch, Room, RoomGraph } from "@/lib/types";
 
@@ -104,6 +104,13 @@ describe("house model", () => {
     expect(walls.map((w) => w.side)).toEqual(["top", "right", "bottom", "left"]);
     expect(walls.find((w) => w.side === "top")!.openings).toEqual([expect.objectContaining({ kind: "door", to_room: "bath" })]);
     expect(walls.find((w) => w.side === "left")!.exterior).toBe(true);
+  });
+});
+
+describe("floorName", () => {
+  it("names storeys for the dollhouse floor picker", () => {
+    expect([-1, 0, 1, 2].map((l) => floorName(l, 4))).toEqual(["Basement", "Ground", "Floor 2", "Floor 3"]);
+    expect(floorName(0, 1)).toBe("House");
   });
 });
 

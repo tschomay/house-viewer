@@ -481,6 +481,13 @@ function wallPieces(r: HouseRoom, side: Side, cuts: Cut[], outside: boolean): Wa
     });
 }
 
+/** A storey's name for floor pickers, from its level: "Basement", "Ground", "Floor 2"… ("House" if it's the only one). */
+export function floorName(level: number, count: number) {
+  if (level < 0) return level === -1 ? "Basement" : `Basement ${-level}`;
+  if (count === 1) return "House";
+  return level === 0 ? "Ground" : `Floor ${level + 1}`;
+}
+
 /** Wall facing `side`, as a plan heading (degrees clockwise from up). */
 export const SIDE_HEADING: Record<Side, number> = { top: 0, right: 90, bottom: 180, left: 270 };
 

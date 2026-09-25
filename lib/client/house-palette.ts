@@ -4,7 +4,7 @@
  * the middle. Used wherever neither a photo nor AI wall art covers a surface.
  * Free and on-device.
  */
-import type { RoomColors } from "@/components/HouseFlythrough";
+import type { RoomColors } from "@/lib/client/house-scene";
 import type { HouseModel } from "../house-model";
 import type { ListingImage } from "../types";
 import { loadImage } from "./images";
