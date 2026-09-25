@@ -573,6 +573,11 @@ export default function AnalyzePage() {
             3D fly-through
           </Link>
         )}
+        {graph && (
+          <Link className="btn" href="/dollhouse" title="Optional: the whole house as a 3D model to spin and zoom">
+            Dollhouse
+          </Link>
+        )}
         <Link
           className="btn primary"
           href="/tour"
