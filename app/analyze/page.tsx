@@ -31,7 +31,7 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
 }
 
 export default function AnalyzePage() {
-  const { project, dispatch, photos, floorPlan, ready } = useProject();
+  const { project, dispatch, photos, floorPlans, floorPlan, ready } = useProject();
   const status = useServerStatus();
   const [graphBusy, setGraphBusy] = useState(false);
   const [graphError, setGraphError] = useState<string | null>(null);
@@ -68,7 +68,7 @@ export default function AnalyzePage() {
     let fresh = false;
     try {
       const { raw, graph } = await cached(`graph:${floorPlan.id}`, async () => {
-        const res = await postJson<{ raw: string; graph: RoomGraph; usage?: GeminiUsage }>("/api/room-graph", { floorPlan: floorPlan.dataUrl });
+        const res = await postJson<{ raw: string; graph: RoomGraph; usage?: GeminiUsage }>("/api/room-graph", { floorPlan: floorPlan.dataUrl, levels: floorPlans.length });
         fresh = true;
         recordUsage("graph", res.usage);
         return res;

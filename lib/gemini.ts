@@ -86,10 +86,19 @@ If the plan prints dimensions (e.g. 12'6" x 11'), convert to metres for sizeM; o
 If there are multiple floors on the image, include all rooms and connect floors via their stairs.
 Return only JSON matching the schema.`;
 
-export async function extractRoomGraph(apiKey: string | null, floorPlanDataUrl: string): Promise<{ raw: string; parsed: unknown; usage: GeminiUsage }> {
+/** For a sheet of several plans laid out by the app (see composePlans), one per level. */
+const levelsNote = (levels: number) =>
+  `\nThis image is ${levels} separate floor plans placed side by side (left to right, then the next row), one per storey, usually lowest first; floor names printed on the plans win. Every room is on exactly one of them: keep its box inside its own plan. Connect the storeys through their stairs.`;
+
+export async function extractRoomGraph(
+  apiKey: string | null,
+  floorPlanDataUrl: string,
+  levels = 1,
+): Promise<{ raw: string; parsed: unknown; usage: GeminiUsage }> {
+  const prompt = ROOM_GRAPH_PROMPT + (levels > 1 ? levelsNote(Math.round(levels)) : "");
   const res = await client(apiKey).models.generateContent({
     model: GEMINI_MODEL,
-    contents: [{ role: "user", parts: [{ inlineData: splitDataUrl(floorPlanDataUrl) }, { text: ROOM_GRAPH_PROMPT }] }],
+    contents: [{ role: "user", parts: [{ inlineData: splitDataUrl(floorPlanDataUrl) }, { text: prompt }] }],
     config: { responseMimeType: "application/json", responseJsonSchema: ROOM_GRAPH_SCHEMA, temperature: 0.2 },
   });
   const raw = res.text ?? "";

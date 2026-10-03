@@ -5,6 +5,7 @@ import type { DepthMap, ImportResult, ListingImage, PhotoMatch, RoomGraph, WallA
 import { applyPlacement, type Placement } from "../placement";
 import { idbGet, idbSet } from "./idb";
 import { apiFetch, onCredsChange } from "./access";
+import { composePlans } from "./images";
 
 export interface Project {
   listingInput: string;
@@ -43,6 +44,8 @@ type Action =
   | { type: "addImages"; images: ListingImage[] }
   | { type: "removeImage"; id: string }
   | { type: "setKind"; id: string; kind: ListingImage["kind"] }
+  /** Move a floor plan one level earlier (-1) or later (+1) among the floor plans. */
+  | { type: "movePlan"; id: string; dir: -1 | 1 }
   | { type: "graph"; graph: RoomGraph | null; raw: string | null; source: Project["graphSource"] }
   | { type: "match"; match: PhotoMatch; raw?: string }
   | { type: "placement"; roomId: string; placement: Placement }
@@ -50,6 +53,9 @@ type Action =
   | { type: "wallArt"; art: WallArt }
   | { type: "clearWallArt" }
   | { type: "replace"; project: Partial<Project> };
+
+/** The floor plans changed: the plan sheet is a different image, so the room graph and every match are stale. */
+const PLAN_CHANGED = { graph: null, graphRaw: null, graphSource: null, matches: {} } satisfies Partial<Project>;
 
 function reducer(state: Project, action: Action): Project {
   switch (action.type) {
@@ -64,7 +70,7 @@ function reducer(state: Project, action: Action): Project {
     case "addImages": {
       const have = new Set(state.images.map((i) => i.id));
       const fresh = action.images.filter((i) => !have.has(i.id) && have.add(i.id));
-      return { ...state, images: [...state.images, ...fresh] };
+      return { ...state, images: [...state.images, ...fresh], ...(fresh.some((i) => i.kind === "floorplan") ? PLAN_CHANGED : {}) };
     }
     case "removeImage": {
       const matches = { ...state.matches };
@@ -78,18 +84,25 @@ function reducer(state: Project, action: Action): Project {
         matches,
         depth,
         // A different floor plan invalidates the room graph and every match.
-        ...(removed?.kind === "floorplan" ? { graph: null, graphRaw: null, graphSource: null, matches: {} } : {}),
+        ...(removed?.kind === "floorplan" ? PLAN_CHANGED : {}),
       };
     }
     case "setKind":
       return {
         ...state,
         images: state.images.map((i) => (i.id === action.id ? { ...i, kind: action.kind } : i)),
-        graph: null,
-        graphRaw: null,
-        graphSource: null,
-        matches: {},
+        ...PLAN_CHANGED,
       };
+    case "movePlan": {
+      const plans = state.images.filter((i) => i.kind === "floorplan");
+      const at = plans.findIndex((i) => i.id === action.id);
+      const other = plans[at + action.dir];
+      if (at < 0 || !other) return state;
+      const a = state.images.indexOf(plans[at]), b = state.images.indexOf(other);
+      const images = [...state.images];
+      [images[a], images[b]] = [images[b], images[a]];
+      return { ...state, images, ...PLAN_CHANGED };
+    }
     case "graph":
       return { ...state, graph: action.graph, graphRaw: action.raw, graphSource: action.source, matches: {}, matchRaw: {}, wallArt: {} };
     case "match":
@@ -120,6 +133,12 @@ interface Ctx {
   ready: boolean;
   dispatch: (a: Action) => void;
   photos: ListingImage[];
+  /** The floor plan images, one per level, in level order. */
+  floorPlans: ListingImage[];
+  /**
+   * The plan everything maps onto: the only floor plan, or all of them laid
+   * out on one sheet (see composePlans). Null when there's no floor plan.
+   */
   floorPlan: ListingImage | null;
 }
 
@@ -128,28 +147,44 @@ const KEY = "project:current";
 
 export function ProjectProvider({ children }: { children: ReactNode }) {
   const [project, dispatch] = useReducer(reducer, EMPTY);
-  const [ready, setReady] = useState(false);
+  const [loaded, setLoaded] = useState(false);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   useEffect(() => {
     idbGet<Project>(KEY).then((saved) => {
       if (saved) dispatch({ type: "load", project: saved });
-      setReady(true);
+      setLoaded(true);
     });
   }, []);
 
   useEffect(() => {
-    if (!ready) return;
+    if (!loaded) return;
     clearTimeout(saveTimer.current);
     saveTimer.current = setTimeout(() => void idbSet(KEY, project), 400);
-  }, [project, ready]);
+  }, [project, loaded]);
 
   const photos = useMemo(() => project.images.filter((i) => i.kind === "photo"), [project.images]);
-  const floorPlan = useMemo(() => project.images.find((i) => i.kind === "floorplan") ?? null, [project.images]);
+  const floorPlans = useMemo(() => project.images.filter((i) => i.kind === "floorplan"), [project.images]);
+  const plansKey = floorPlans.map((p) => p.id).join(",");
+  // Several plans are drawn onto one sheet; `ready` waits for it so pages never see a missing plan.
+  const [sheet, setSheet] = useState<{ key: string; image: ListingImage | null }>({ key: "", image: null });
+  useEffect(() => {
+    if (floorPlans.length <= 1 || sheet.key === plansKey) return;
+    let live = true;
+    composePlans(floorPlans)
+      .catch(() => floorPlans[0])
+      .then((image) => live && setSheet({ key: plansKey, image }));
+    return () => {
+      live = false;
+    };
+  }, [floorPlans, plansKey, sheet.key]);
+  const sheetReady = floorPlans.length <= 1 || sheet.key === plansKey;
+  const floorPlan = floorPlans.length <= 1 ? (floorPlans[0] ?? null) : sheetReady ? sheet.image : null;
+  const ready = loaded && sheetReady;
   const stableDispatch = useCallback((a: Action) => dispatch(a), []);
 
   return (
-    <ProjectContext.Provider value={{ project, ready, dispatch: stableDispatch, photos, floorPlan }}>
+    <ProjectContext.Provider value={{ project, ready, dispatch: stableDispatch, photos, floorPlans, floorPlan }}>
       {children}
     </ProjectContext.Provider>
   );
