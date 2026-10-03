@@ -31,8 +31,10 @@ async function mapLimit<T, R>(items: T[], limit: number, fn: (t: T) => Promise<R
   return out;
 }
 
+const levels = (n: number) => (n === 1 ? "added" : `${n} levels`);
+
 export default function IntakePage() {
-  const { project, dispatch, photos, floorPlan, ready } = useProject();
+  const { project, dispatch, photos, floorPlans, ready } = useProject();
   const status = useServerStatus();
   const locked = status ? !status.access.ok : false;
   const router = useRouter();
@@ -109,9 +111,8 @@ export default function IntakePage() {
     const list = [...files].filter((f) => f.type.startsWith("image/"));
     const results = await mapLimit(list, 3, (f) => toListingImage(f, kind, "upload", { label: f.name }));
     const ok = results.flatMap((r) => (r.status === "fulfilled" ? [r.value] : []));
-    // Only one floor plan drives the room graph; demote any previous one.
-    if (kind === "floorplan" && floorPlan && ok.length) dispatch({ type: "setKind", id: floorPlan.id, kind: "photo" });
-    dispatch({ type: "addImages", images: kind === "floorplan" ? ok.slice(0, 1) : ok });
+    // Several floor plans are fine: one per level, in the order added.
+    dispatch({ type: "addImages", images: ok });
     const bad = results.length - ok.length + (files.length - list.length);
     if (bad) setAddError(`${bad} file(s) couldn't be read as images (HEIC isn't supported by every browser; try JPEG).`);
   }
@@ -252,8 +253,10 @@ export default function IntakePage() {
         <div className="row" style={{ alignItems: "stretch" }}>
           <label className={`drop grow ${over === "floorplan" ? "over" : ""}`} {...drop("floorplan")}>
             <strong style={{ color: "var(--text)" }}>Floor plan</strong>
-            <div className="small">{floorPlan ? "✓ added (drop to replace)" : "Tap or drop one image"}</div>
-            <input type="file" accept="image/*" hidden onChange={(e) => addFiles(e.target.files, "floorplan")} />
+            <div className="small">
+              {floorPlans.length ? `✓ ${levels(floorPlans.length)} (drop to add a level)` : "Tap or drop one image per level"}
+            </div>
+            <input type="file" accept="image/*" multiple hidden onChange={(e) => addFiles(e.target.files, "floorplan")} />
           </label>
           <label className={`drop grow ${over === "photo" ? "over" : ""}`} {...drop("photo")}>
             <strong style={{ color: "var(--text)" }}>Room photos</strong>
@@ -268,7 +271,7 @@ export default function IntakePage() {
         <section className="card">
           <div className="card-head">
             <h2>
-              {photos.length} photo{photos.length === 1 ? "" : "s"} · {floorPlan ? "floor plan ✓" : "no floor plan yet"}
+              {photos.length} photo{photos.length === 1 ? "" : "s"} · {floorPlans.length ? `floor plan ✓${floorPlans.length > 1 ? ` (${levels(floorPlans.length)})` : ""}` : "no floor plan yet"}
             </h2>
             <div className="row" style={{ gap: 6 }}>
               <button className="btn small ghost" onClick={() => exportProject(project)} title="Save photos, rooms and camera placements as one file">
@@ -279,27 +282,49 @@ export default function IntakePage() {
               </button>
             </div>
           </div>
+          {floorPlans.length > 1 && (
+            <p className="small muted" style={{ marginTop: 0 }}>
+              The floor plans are read together as one house, one level each. Use ‹ › to put them in order, lowest level first.
+            </p>
+          )}
           <div className="gallery">
             {[...project.images]
               .sort((a, b) => (a.kind === b.kind ? 0 : a.kind === "floorplan" ? -1 : 1))
-              .map((img) => (
+              .map((img) => {
+                const level = floorPlans.indexOf(img);
+                return (
                 <div key={img.id} className={`thumb ${img.kind === "floorplan" ? "plan" : ""}`}>
                   {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img src={img.dataUrl} alt={img.label ?? ""} />
                   <button className="x" aria-label="Remove" onClick={() => dispatch({ type: "removeImage", id: img.id })}>
                     ×
                   </button>
+                  {floorPlans.length > 1 && level >= 0 && (
+                    <div className="levels">
+                      <button aria-label="Lower level" disabled={level === 0} onClick={() => dispatch({ type: "movePlan", id: img.id, dir: -1 })}>
+                        ‹
+                      </button>
+                      <button aria-label="Higher level" disabled={level === floorPlans.length - 1} onClick={() => dispatch({ type: "movePlan", id: img.id, dir: 1 })}>
+                        ›
+                      </button>
+                    </div>
+                  )}
                   <button
                     className="kind"
-                    onClick={() => {
-                      if (img.kind === "photo" && floorPlan) dispatch({ type: "setKind", id: floorPlan.id, kind: "photo" });
-                      dispatch({ type: "setKind", id: img.id, kind: img.kind === "photo" ? "floorplan" : "photo" });
-                    }}
+                    title={img.kind === "floorplan" ? "Tap to treat as a photo instead" : "Tap to use as a floor plan (one per level)"}
+                    onClick={() => dispatch({ type: "setKind", id: img.id, kind: img.kind === "photo" ? "floorplan" : "photo" })}
                   >
-                    {img.kind === "floorplan" ? "★ Floor plan" : img.source === "import" ? "Imported · set as plan" : "Set as plan"}
+                    {img.kind === "floorplan"
+                      ? floorPlans.length > 1
+                        ? `★ Plan · level ${level + 1}`
+                        : "★ Floor plan"
+                      : img.source === "import"
+                        ? "Imported · set as plan"
+                        : "Set as plan"}
                   </button>
                 </div>
-              ))}
+                );
+              })}
           </div>
         </section>
       )}
@@ -340,7 +365,7 @@ export default function IntakePage() {
         </label>
         {" "}(photos, rooms and camera placements; depth is recomputed).
       </p>
-      {!floorPlan && photos.length > 0 && (
+      {!floorPlans.length && photos.length > 0 && (
         <p className="small muted">Without a floor plan you can still view each photo in 3D, but not walk between rooms.</p>
       )}
     </main>

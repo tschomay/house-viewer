@@ -129,3 +129,52 @@ export async function redrawImage(
   }
   return blobToDataUrl(await canvasToJpeg(canvas));
 }
+
+/** Long-edge cap for a sheet of several floor plans; one level alone stays ≤ MAX_EDGE. */
+const MAX_SHEET_EDGE = 3200;
+
+/**
+ * Lay several floor plans (one per level) out on one white sheet: side by side
+ * for up to three, else in a grid, each scaled to the same height, in the
+ * order given. Everything downstream (the Gemini room map, the plan overlay,
+ * the 3D house's storey clustering) then works on one image, as it does for a
+ * listing that prints every floor on one plan. The gap between plans keeps
+ * each level's rooms from touching the next level's. One plan is returned
+ * as is, so its id (and the cached room map behind it) doesn't change.
+ */
+export async function composePlans(plans: ListingImage[]): Promise<ListingImage | null> {
+  if (plans.length <= 1) return plans[0] ?? null;
+  const imgs = await Promise.all(plans.map((p) => loadImage(p.dataUrl)));
+  const cellH = Math.max(...imgs.map((i) => i.naturalHeight));
+  const widths = imgs.map((i) => (i.naturalWidth * cellH) / i.naturalHeight);
+  const cols = plans.length <= 3 ? plans.length : Math.ceil(Math.sqrt(plans.length));
+  const rows: number[][] = [];
+  for (let i = 0; i < plans.length; i += cols) rows.push(widths.slice(i, i + cols).map((_, j) => i + j));
+  const gap = Math.round(0.04 * Math.max(cellH, ...rows.map((r) => r.reduce((s, i) => s + widths[i], 0))));
+  const sheetW = Math.max(...rows.map((r) => r.reduce((s, i) => s + widths[i], 0) + gap * (r.length + 1)));
+  const sheetH = rows.length * cellH + gap * (rows.length + 1);
+  const scale = Math.min(1, MAX_SHEET_EDGE / Math.max(sheetW, sheetH));
+  const canvas = document.createElement("canvas");
+  canvas.width = Math.round(sheetW * scale);
+  canvas.height = Math.round(sheetH * scale);
+  const ctx = canvas.getContext("2d")!;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+  rows.forEach((row, r) => {
+    let x = gap;
+    for (const i of row) {
+      ctx.drawImage(imgs[i], x * scale, (gap + r * (cellH + gap)) * scale, widths[i] * scale, cellH * scale);
+      x += widths[i] + gap;
+    }
+  });
+  const jpeg = await canvasToJpeg(canvas);
+  return {
+    id: await sha256Hex(await jpeg.arrayBuffer()),
+    kind: "floorplan",
+    source: "upload",
+    dataUrl: await blobToDataUrl(jpeg),
+    width: canvas.width,
+    height: canvas.height,
+    label: `${plans.length} floor plans`,
+  };
+}

@@ -1,6 +1,6 @@
 # Project status & handoff
 
-_Last updated: 2026-09-25 (dollhouse view). Read this first if you're picking up the project in a new session._
+_Last updated: 2026-10-03 (one floor plan per level). Read this first if you're picking up the project in a new session._
 
 The original brief (goals, pipeline, build order, open questions) is summarized in [README.md](../README.md). This file covers **where things stand**, **what's been verified**, and **what to do next**.
 
@@ -157,3 +157,13 @@ The demo-house ground truth (camera positions, headings, room boxes) is in `lib/
 - **The sandbox's agent proxy cuts Gemini requests at ~30 s** if no bytes flow ("upstream request failed", 502). Vercel allows these routes 120 s. Long multi-image calls stream with `thinkingConfig.includeThoughts` so something arrives every couple of seconds (`placePhotos` in `lib/gemini.ts`).
 - **Gemini cost** is estimated from `usageMetadata` (thinking tokens bill as output). Thinking tokens dominate every call's cost; that's why the one-call sort (one reasoning pass for all photos) and Flash make such a difference.
 - **Monocular depth is relative.** Everything metric comes from assumptions (`DEFAULT_INTRINSICS` in `lib/geometry.ts`) plus the plan's printed room sizes.
+
+## Floor plans: all levels on one image, or one image per level (user request, 2026-10-03)
+
+"It could be all levels on a single photo or one photo per level. Both cases need to work."
+
+- **One image with every level** works as before: it's used as is, the same image id, so existing projects and their cached room maps don't change. The room-map prompt already tells Gemini to include every floor and connect them through the stairs, and the house model splits the rooms into storeys (rooms whose boxes touch form a storey).
+- **One image per level** is new. The Listing page's **Floor plan** box takes several images, and **Set as plan** on a photo adds it as another level instead of replacing the plan. With two or more, each plan thumbnail shows **‹ ›** to put them in order (lowest level first), and its tag reads "★ Plan · level n". Imports already brought in several floor plans; now all of them are used, not just the first.
+- **How:** `composePlans` (`lib/client/images.ts`) lays the plans out on one white sheet: side by side up to three, else a grid, each scaled to the same height with a gap of 4% between them, capped at 3200 px. `useProject().floorPlan` is that sheet (`floorPlans` is the per-level list), so the room map, sort, placement, plan overlay and 3D house work unchanged on one image: the multi-level single-image case. The room-map call gets `levels`, and the prompt then says it's N plans side by side, one per storey, and to keep each room's box inside its own plan. `ready` from `useProject` waits for the sheet.
+- Adding, removing, reordering or retagging a plan clears the room map and the matches, since the sheet is a different image.
+- **Verified** in headless Chromium at phone size with two synthetic plans and Gemini's reply faked: sheet 1792×728 with both plans side by side, `levels: 2` sent, reordering swaps them, and the dollhouse shows Ground + Floor 2 with no page errors. The single-image path's code is unchanged; typecheck, lint and unit tests pass. **Not yet tried with a real Gemini call on real per-level plans.** Which storey counts as ground is still chosen from room types (entry, kitchen…), not from the plan order.
